@@ -739,10 +739,7 @@ function ItemCatalogue({ onCreate, onEdit, onAction }: ItemCatalogueProps) {
               <TableHead>SKU</TableHead>
               <TableHead>Item</TableHead>
               <TableHead>Category</TableHead>
-              <TableHead className="text-center">Stock</TableHead>
-              <TableHead className="text-center">Reorder</TableHead>
-              <TableHead>Unit cost</TableHead>
-              <TableHead>Vendor</TableHead>
+              <TableHead className="text-center">Reorder point</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[120px] text-right">Actions</TableHead>
             </TableRow>
@@ -758,10 +755,7 @@ function ItemCatalogue({ onCreate, onEdit, onAction }: ItemCatalogueProps) {
                   </div>
                 </TableCell>
                 <TableCell>{item.category}</TableCell>
-                <TableCell className="text-center">{item.stock}</TableCell>
                 <TableCell className="text-center">{item.reorder}</TableCell>
-                <TableCell>{item.unitCost}</TableCell>
-                <TableCell>{item.vendor}</TableCell>
                 <TableCell>
                   <Badge variant="secondary" className={statusBadge[item.status]}>
                     {item.status}

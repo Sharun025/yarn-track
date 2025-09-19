@@ -18,12 +18,15 @@ create type public.batch_status as enum (
 
 -- Utility trigger to manage updated_at columns
 create or replace function public.set_updated_at()
-returns trigger as $$
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
 begin
   new.updated_at = timezone('utc', now());
   return new;
 end;
-$$ language plpgsql;
+$$;
 
 -- Profiles table extends auth.users with roles/metadata
 create table if not exists public.profiles (
