@@ -9,7 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { itemMaster } from "@/lib/mock-item-master";
+import { useApi } from "@/lib/hooks/useApi";
+
+type ItemRecord = {
+  id: string;
+  sku: string;
+  name: string;
+  category: string | null;
+  unit: string;
+};
 
 const mockSnapshots = [
   { code: "SFG-SLK-NTW-30D-HNK", system: 320, physical: 318, location: "Reeling" },
@@ -18,12 +26,17 @@ const mockSnapshots = [
 ];
 
 export default function StockAuditPage() {
+  const itemsState = useApi<ItemRecord[]>("/api/items");
+  const items = useMemo(() => itemsState.data ?? [], [itemsState.data]);
   const [sku, setSku] = useState("");
   const [qty, setQty] = useState("");
   const [location, setLocation] = useState("Reeling");
   const [notes, setNotes] = useState("");
 
-  const selectedItem = useMemo(() => itemMaster.find((record) => record.sku === sku) ?? null, [sku]);
+  const selectedItem = useMemo(
+    () => items.find((record) => record.sku === sku) ?? null,
+    [items, sku]
+  );
 
   const varianceSummary = useMemo(() => {
     const difference = mockSnapshots.reduce((acc, item) => acc + (item.physical - item.system), 0);
@@ -46,22 +59,28 @@ export default function StockAuditPage() {
               <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground" htmlFor="sku">
                 Item code
               </label>
-              <Select value={sku} onValueChange={setSku}>
+              <Select value={sku} onValueChange={setSku} disabled={itemsState.isLoading || Boolean(itemsState.error)}>
                 <SelectTrigger id="sku">
-                  <SelectValue placeholder="Select item from master" />
+                  <SelectValue placeholder={itemsState.isLoading ? "Loading items…" : "Select item from master"} />
                 </SelectTrigger>
                 <SelectContent className="max-h-64">
-                  {itemMaster.map((item) => (
+                  {items.map((item) => (
                     <SelectItem key={item.sku} value={item.sku}>
                       {item.sku} — {item.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {selectedItem ? (
+              {itemsState.error ? (
+                <div className="rounded-md border border-dashed bg-rose-50 p-3 text-xs text-rose-700">
+                  Failed to load item master. Please retry.
+                </div>
+              ) : selectedItem ? (
                 <div className="rounded-md border border-dashed bg-muted/30 p-3 text-xs">
                   <p className="font-semibold text-foreground">{selectedItem.name}</p>
-                  <p className="text-muted-foreground">UOM: {selectedItem.uom} • Category: {selectedItem.category}</p>
+                  <p className="text-muted-foreground">
+                    UOM: {selectedItem.unit} • Category: {selectedItem.category ?? "—"}
+                  </p>
                 </div>
               ) : null}
             </div>
@@ -141,7 +160,7 @@ export default function StockAuditPage() {
             </TableHeader>
             <TableBody>
               {mockSnapshots.map((line) => {
-                const masterRecord = itemMaster.find((record) => record.sku === line.code);
+                const masterRecord = items.find((record) => record.sku === line.code);
                 const diff = line.physical - line.system;
                 return (
                   <TableRow key={line.code}>
@@ -151,7 +170,7 @@ export default function StockAuditPage() {
                         {masterRecord ? (
                           <>
                             <p className="text-xs text-muted-foreground">{masterRecord.name}</p>
-                            <p className="text-xs text-muted-foreground">UOM: {masterRecord.uom}</p>
+                            <p className="text-xs text-muted-foreground">UOM: {masterRecord.unit}</p>
                           </>
                         ) : (
                           <p className="text-xs text-muted-foreground">Unmapped in master</p>

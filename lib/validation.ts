@@ -12,6 +12,9 @@ export const batchStatusValues = [
   "cancelled",
 ] as const;
 
+export const uomStatusValues = ["Active", "Inactive"] as const;
+export const workerStatusValues = ["Active", "On leave", "Inactive"] as const;
+
 export const processCreateSchema = z.object({
   slug: z
     .string()
@@ -43,6 +46,40 @@ export const itemCreateSchema = z.object({
 });
 
 export const itemUpdateSchema = itemCreateSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  {
+    message: "Provide at least one field to update",
+  }
+);
+
+export const uomCreateSchema = z.object({
+  code: z.string().min(1, "Code is required"),
+  name: z.string().min(1, "Name is required"),
+  type: z.string().optional(),
+  precision: z.number().int().min(0).max(6).optional(),
+  status: z.enum(uomStatusValues).optional(),
+  description: z.string().optional(),
+});
+
+export const uomUpdateSchema = uomCreateSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  {
+    message: "Provide at least one field to update",
+  }
+);
+
+export const workerCreateSchema = z.object({
+  code: z.string().min(1, "Code is required"),
+  name: z.string().min(1, "Name is required"),
+  role: z.string().optional(),
+  department: z.string().optional(),
+  shift: z.string().optional(),
+  status: z.enum(workerStatusValues).optional(),
+  contact: z.string().optional(),
+  skills: z.string().optional(),
+});
+
+export const workerUpdateSchema = workerCreateSchema.partial().refine(
   (data) => Object.keys(data).length > 0,
   {
     message: "Provide at least one field to update",
@@ -130,6 +167,10 @@ export type ProcessCreateInput = z.infer<typeof processCreateSchema>;
 export type ProcessUpdateInput = z.infer<typeof processUpdateSchema>;
 export type ItemCreateInput = z.infer<typeof itemCreateSchema>;
 export type ItemUpdateInput = z.infer<typeof itemUpdateSchema>;
+export type UomCreateInput = z.infer<typeof uomCreateSchema>;
+export type UomUpdateInput = z.infer<typeof uomUpdateSchema>;
+export type WorkerCreateInput = z.infer<typeof workerCreateSchema>;
+export type WorkerUpdateInput = z.infer<typeof workerUpdateSchema>;
 export type BomTemplateCreateInput = z.infer<typeof bomTemplateCreateSchema>;
 export type BomTemplateUpdateInput = z.infer<typeof bomTemplateUpdateSchema>;
 export type BatchCreateInput = z.infer<typeof batchCreateSchema>;

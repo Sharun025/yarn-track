@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useFieldArray, useForm, type UseFormReturn } from "react-hook-form";
-import { MoreHorizontal, X } from "lucide-react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
+import { MoreHorizontal, Plus, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,284 +62,13 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { itemMaster } from "@/lib/mock-item-master";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { useApi } from "@/lib/hooks/useApi";
 
-const itemMetrics = [
-  { title: "Active SKUs", value: 128, meta: "12 awaiting approval" },
-  { title: "Avg. unit cost", value: "₹42.70", meta: "Weighted across all items" },
-  { title: "Low stock items", value: 9, meta: "Below reorder threshold" },
-  { title: "Featured vendors", value: 6, meta: "Preferred supply partners" },
-];
-
-const items = itemMaster;
-
-const processes = [
-  {
-    name: "Soaking",
-    summary: "Condition silk cocoons in controlled vats to set moisture evenly before winding.",
-    workers: ["EMP-DYE-01", "EMP-DYE-02"],
-    hasTransactions: true,
-  },
-  {
-    name: "Hank Winding",
-    summary: "Wind soaked filament onto hanks while monitoring denier and strand tension.",
-    workers: ["EMP-SPN-01", "EMP-SPN-02"],
-    hasTransactions: true,
-  },
-  {
-    name: "Assembly Winding",
-    summary: "Combine individual ends into balanced packages ready for twisting operations.",
-    workers: ["EMP-WVG-02", "EMP-QC-02"],
-    hasTransactions: false,
-  },
-  {
-    name: "Primary Twisting",
-    summary: "Apply first level twist to build ply strength and set twist direction.",
-    workers: ["EMP-SPN-01", "EMP-WVG-01"],
-    hasTransactions: true,
-  },
-  {
-    name: "Secondary Twisting",
-    summary: "Equalize and lock primary twist with counter rotations for stability.",
-    workers: ["EMP-WVG-01", "EMP-QC-01"],
-    hasTransactions: true,
-  },
-  {
-    name: "Vacuum Heat Setting",
-    summary: "Stabilize twisted yarn under vacuum and heat to fix the final twist profile.",
-    workers: ["EMP-DYE-01", "EMP-QC-02"],
-    hasTransactions: true,
-  },
-  {
-    name: "Re Winding",
-    summary: "Rewind treated yarn to remove tension spikes and prepare for downstream winding.",
-    workers: ["EMP-SPN-02", "EMP-WVG-02"],
-    hasTransactions: false,
-  },
-  {
-    name: "Pirn Winding",
-    summary: "Transfer yarn onto pirns with consistent build for shuttle insertion.",
-    workers: ["EMP-WVG-01", "EMP-WVG-02"],
-    hasTransactions: true,
-  },
-  {
-    name: "Silk Warping",
-    summary: "Arrange pirned yarn into warp beams with precise tension and end distribution.",
-    workers: ["EMP-WVG-01", "EMP-QC-02"],
-    hasTransactions: true,
-  }
-];
-
-const bomTemplates = [
-  {
-    id: "BOM-SLK-NTW-001",
-    outputItem: "SFG-SLK-NTW-30D-HNK",
-    process: "Hank Winding",
-    outputQuantity: "500",
-    components: [
-      { item: "SFG-SLK-NTW-30D-SOK", quantity: "480" },
-      { item: "SFG-SLK-STW-30D-2PLY-ASW", quantity: "20" },
-    ],
-    sop:
-      "1. Soak reeled silk hanks in pre-heated vats.\n2. Wind onto assembly frames with uniform tension.\n3. Air dry and QA for denier consistency before release.",
-    hasTransactions: true,
-    lastUpdated: "18 Sep 2024",
-    updatedBy: "Harita Bose",
-  },
-  {
-    id: "BOM-SLK-STW-001",
-    outputItem: "SFG-SLK-STW-30D-2PLY-TPI55-VHS",
-    process: "Vacuum Heat Setting",
-    outputQuantity: "320",
-    components: [
-      { item: "SFG-SLK-STW-30D-2PLY-TPI55-PW", quantity: "300" },
-      { item: "SFG-SLK-STW-30D-2PLY-TPI55-RW", quantity: "20" },
-    ],
-    sop:
-      "1. Load primary pirns and set twist direction.\n2. Run vacuum heat setting cycle for 18 minutes.\n3. Inspect twist stability and log variance before storage.",
-    hasTransactions: false,
-    lastUpdated: "22 Sep 2024",
-    updatedBy: "Nikhil Sharma",
-  },
-  {
-    id: "BOM-SLK-ZTW-001",
-    outputItem: "SFG-SLK-ZTW-30D-2PLY-TPI55-VHS",
-    process: "Silk Warping",
-    outputQuantity: "300",
-    components: [
-      { item: "SFG-SLK-ZTW-30D-2PLY-TPI55-TFOS", quantity: "280" },
-      { item: "SFG-SLK-ZTW-30D-2PLY-ASW", quantity: "20" },
-    ],
-    sop:
-      "1. Condition Z-twist spindles and balance creel load.\n2. Execute secondary twist pass and vacuum heat set.\n3. Cool under controlled humidity before QA release.",
-    hasTransactions: true,
-    lastUpdated: "24 Sep 2024",
-    updatedBy: "Pranitha Rao",
-  },
-];
-
-const workers = [
-  {
-    code: "EMP-SPN-01",
-    name: "Anita Rao",
-    role: "Senior Spinning Operator",
-    department: "Spinning",
-    shift: "Shift A",
-    status: "Active",
-    contact: "+91 98765 43210",
-    skills: "Autoconer, Blowroom setup",
-    hasTransactions: true,
-  },
-  {
-    code: "EMP-SPN-02",
-    name: "Vikram Iyer",
-    role: "Carding Technician",
-    department: "Spinning",
-    shift: "Shift B",
-    status: "Active",
-    contact: "+91 91234 56780",
-    skills: "Carding maintenance, Drawing frame",
-    hasTransactions: false,
-  },
-  {
-    code: "EMP-QC-01",
-    name: "Sahana Gupta",
-    role: "Quality Inspector",
-    department: "Quality",
-    shift: "Shift A",
-    status: "On leave",
-    contact: "+91 93450 12876",
-    skills: "Inline testing, Cotton fibre QA",
-    hasTransactions: false,
-  },
-  {
-    code: "EMP-DYE-01",
-    name: "Karthik Menon",
-    role: "Dye House Specialist",
-    department: "Dyeing",
-    shift: "Shift B",
-    status: "Active",
-    contact: "+91 98231 44567",
-    skills: "Vat dyeing, Colour matching",
-    hasTransactions: true,
-  },
-  {
-    code: "EMP-DYE-02",
-    name: "Leena Das",
-    role: "Lab Technician",
-    department: "Dyeing",
-    shift: "Shift A",
-    status: "Active",
-    contact: "+91 90011 22445",
-    skills: "Shade cards, Lab dips",
-    hasTransactions: false,
-  },
-  {
-    code: "EMP-WVG-01",
-    name: "Raghav Kapoor",
-    role: "Weaving Supervisor",
-    department: "Weaving",
-    shift: "Shift A",
-    status: "Active",
-    contact: "+91 90123 45678",
-    skills: "Loom setup, Warp alignment",
-    hasTransactions: true,
-  },
-  {
-    code: "EMP-WVG-02",
-    name: "Fariha Khan",
-    role: "Loom Operator",
-    department: "Weaving",
-    shift: "Shift C",
-    status: "Active",
-    contact: "+91 99800 11223",
-    skills: "Projectile looms, Preventive upkeep",
-    hasTransactions: false,
-  },
-  {
-    code: "EMP-QC-02",
-    name: "Manoj Patel",
-    role: "Quality Analyst",
-    department: "Quality",
-    shift: "Shift B",
-    status: "Active",
-    contact: "+91 91567 89012",
-    skills: "Fabric inspection, Shade evaluation",
-    hasTransactions: true,
-  }
-];
-
-const uoms = [
-  {
-    code: "kg",
-    name: "Kilogram",
-    type: "Weight",
-    precision: "3",
-    status: "Active",
-    description: "Standard for yarn weight",
-    hasTransactions: true,
-  },
-  {
-    code: "cone",
-    name: "Cone",
-    type: "Count",
-    precision: "0",
-    status: "Active",
-    description: "Individual yarn cone",
-    hasTransactions: false,
-  },
-  {
-    code: "bobbin",
-    name: "Bobbin",
-    type: "Count",
-    precision: "0",
-    status: "Inactive",
-    description: "Legacy winding bobbin",
-    hasTransactions: false,
-  },
-  {
-    code: "litre",
-    name: "Litre",
-    type: "Volume",
-    precision: "2",
-    status: "Active",
-    description: "Liquids and chemical solutions",
-    hasTransactions: true,
-  }
-];
-
-const itemCategories = ["Raw material", "Chemicals", "Packing", "Consumable"];
-const itemStatuses = ["Active", "Reorder", "Watch", "Inactive"];
-const processOptions = processes.map((process) => process.name);
-const uomTypes = ["Weight", "Length", "Count", "Volume", "Area"];
-const uomStatuses = ["Active", "Inactive"];
-const uomOptions = uoms.map((unit) => ({ code: unit.code, name: unit.name, status: unit.status }));
-const workerStatuses = ["Active", "On leave", "Inactive"];
-const workerOptions = workers.map((worker) => ({
-  code: worker.code,
-  name: worker.name,
-  role: worker.role,
-  status: worker.status,
-  department: worker.department,
-}));
-const workerDirectory = workers.reduce<Record<string, typeof workers[number]>>((acc, worker) => {
-  acc[worker.code] = worker;
-  return acc;
-}, {});
-const workerDepartments = Array.from(
-  new Set(workers.map((worker) => worker.department).filter((dept): dept is string => Boolean(dept)))
-).sort();
-const itemOptions = items.map((item) => ({
-  sku: item.sku,
-  name: item.name,
-  uom: item.uom,
-}));
-const itemDirectory = items.reduce<Record<string, typeof items[number]>>((acc, item) => {
-  acc[item.sku] = item;
-  return acc;
-}, {});
+const itemStatusOptions = ["Active", "Reorder", "Watch", "Inactive"] as const;
+const itemCategoryOptions = ["Raw material", "Chemicals", "Packing", "Consumable"];
+const uomTypeOptions = ["Weight", "Length", "Count", "Volume", "Area"];
+const workerStatusOptions = ["Active", "On leave", "Inactive"] as const;
 
 const statusBadge: Record<string, string> = {
   Active: "border-transparent bg-emerald-100 text-emerald-700",
@@ -347,352 +76,438 @@ const statusBadge: Record<string, string> = {
   Watch: "border-transparent bg-rose-100 text-rose-700",
   Inactive: "border-dashed bg-muted text-muted-foreground",
   "On leave": "border-transparent bg-amber-100 text-amber-700",
-  Approved: "border-transparent bg-emerald-100 text-emerald-700",
-  "Under review": "border-transparent bg-amber-100 text-amber-700",
-  Draft: "border-dashed bg-muted text-muted-foreground",
 };
 
-type ItemFormValues = {
+const jsonHeaders = {
+  "Content-Type": "application/json",
+};
+
+async function request<T>(url: string, init: RequestInit) {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      ...jsonHeaders,
+      ...(init.headers ?? {}),
+    },
+  });
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    try {
+      const payload = await response.json();
+      if (payload?.error) {
+        message = payload.error;
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        message = error.message;
+      }
+    }
+    throw new Error(message);
+  }
+
+  if (response.status === 204) {
+    return null as T;
+  }
+
+  const payload = (await response.json()) as { data?: T };
+  return (payload?.data ?? null) as T;
+}
+
+type ApiState<T> = {
+  records: T[];
+  isLoading: boolean;
+  error: Error | null;
+  refresh: () => Promise<void>;
+};
+
+type ItemRecord = {
+  id: string;
   sku: string;
   name: string;
-  category: string;
-  uom: string;
-  reorder: string;
-  status: string;
-  notes: string;
+  category: string | null;
+  unit: string;
+  unit_cost: number | null;
+  reorder_level: number | null;
+  status: string | null;
+  vendor: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
-type ProcessFormValues = {
-  name: string;
-  summary: string;
-  workers: string[];
-};
-
-type BomComponentFormValues = {
-  item: string;
-  quantity: string;
-};
-
-type BomFormValues = {
-  outputItem: string;
-  process: string;
-  outputQuantity: string;
-  components: BomComponentFormValues[];
-  sop: string;
-};
-
-type UomFormValues = {
+type UomRecord = {
+  id: string;
   code: string;
   name: string;
-  type: string;
-  precision: string;
-  status: string;
-  description: string;
+  type: string | null;
+  precision: number | null;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 };
 
-type WorkerFormValues = {
+type WorkerRecord = {
+  id: string;
+  code: string;
+  display_name: string;
+  role: string | null;
+  department: string | null;
+  shift: string | null;
+  status: string | null;
+  contact: string | null;
+  skills: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ProcessRecord = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  sequence: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type BomComponentRecord = {
+  id: string;
+  expected_quantity: number | null;
+  unit: string;
+  item: {
+    id: string;
+    sku: string;
+    name: string;
+  } | null;
+};
+
+type BomTemplateRecord = {
+  id: string;
   code: string;
   name: string;
-  role: string;
-  department: string;
-  shift: string;
-  status: string;
-  skills: string;
-  contact: string;
+  process_id: string | null;
+  process: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
+  output_item_id: string | null;
+  output_quantity: number | null;
+  instructions: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  components: BomComponentRecord[];
 };
 
-type FormEntity = "item" | "process" | "bom" | "uom" | "worker";
+type MastersContextValue = {
+  items: ApiState<ItemRecord>;
+  uoms: ApiState<UomRecord>;
+  workers: ApiState<WorkerRecord>;
+  processes: ApiState<ProcessRecord>;
+  bomTemplates: ApiState<BomTemplateRecord>;
+};
+
+const MastersDataContext = createContext<MastersContextValue | null>(null);
+
+const useMastersData = () => {
+  const context = useContext(MastersDataContext);
+  if (!context) {
+    throw new Error("Masters data context is unavailable");
+  }
+  return context;
+};
+
+type FormEntity = "item" | "uom" | "worker" | "process" | "bom";
 type FormMode = "create" | "edit";
 
 type DialogState = {
   open: boolean;
   entity: FormEntity;
   mode: FormMode;
-  data?: Record<string, unknown> | null;
+  record: unknown | null;
 };
-
-type ActionType = "delete" | "deactivate";
 
 type ActionState = {
   open: boolean;
   entity: FormEntity;
-  action: ActionType;
-  record: Record<string, unknown> | null;
+  record: unknown | null;
 };
 
 export default function MastersPage() {
+  const itemsState = useApi<ItemRecord[]>("/api/items");
+  const uomsState = useApi<UomRecord[]>("/api/uoms");
+  const workersState = useApi<WorkerRecord[]>("/api/workers");
+  const processesState = useApi<ProcessRecord[]>("/api/processes");
+  const bomTemplatesState = useApi<BomTemplateRecord[]>("/api/bom/templates");
+
+  const contextValue = useMemo<MastersContextValue>(
+    () => ({
+      items: {
+        records: itemsState.data ?? [],
+        isLoading: itemsState.isLoading,
+        error: itemsState.error,
+        refresh: itemsState.refresh,
+      },
+      uoms: {
+        records: uomsState.data ?? [],
+        isLoading: uomsState.isLoading,
+        error: uomsState.error,
+        refresh: uomsState.refresh,
+      },
+      workers: {
+        records: workersState.data ?? [],
+        isLoading: workersState.isLoading,
+        error: workersState.error,
+        refresh: workersState.refresh,
+      },
+      processes: {
+        records: processesState.data ?? [],
+        isLoading: processesState.isLoading,
+        error: processesState.error,
+        refresh: processesState.refresh,
+      },
+      bomTemplates: {
+        records: bomTemplatesState.data ?? [],
+        isLoading: bomTemplatesState.isLoading,
+        error: bomTemplatesState.error,
+        refresh: bomTemplatesState.refresh,
+      },
+    }),
+    [
+      itemsState.data,
+      itemsState.error,
+      itemsState.isLoading,
+      itemsState.refresh,
+      uomsState.data,
+      uomsState.error,
+      uomsState.isLoading,
+      uomsState.refresh,
+      workersState.data,
+      workersState.error,
+      workersState.isLoading,
+      workersState.refresh,
+      processesState.data,
+      processesState.error,
+      processesState.isLoading,
+      processesState.refresh,
+      bomTemplatesState.data,
+      bomTemplatesState.error,
+      bomTemplatesState.isLoading,
+      bomTemplatesState.refresh,
+    ]
+  );
+
+  const metrics = useMemo(() => {
+    const items = contextValue.items.records;
+    const processes = contextValue.processes.records;
+    const workers = contextValue.workers.records;
+    const bomTemplates = contextValue.bomTemplates.records;
+
+    const activeItems = items.filter((item) => (item.status ?? "").toLowerCase() === "active").length;
+    const activeProcesses = processes.filter((process) => process.is_active).length;
+    const activeWorkers = workers.filter((worker) => (worker.status ?? "").toLowerCase() === "active").length;
+
+    return [
+      { title: "Total SKUs", value: items.length, meta: `${activeItems} active` },
+      { title: "Processes", value: processes.length, meta: `${activeProcesses} available` },
+      { title: "Workers", value: workers.length, meta: `${activeWorkers} active` },
+      { title: "BOM templates", value: bomTemplates.length, meta: "Configured outputs" },
+    ];
+  }, [contextValue]);
+
   const [dialogState, setDialogState] = useState<DialogState>({
     open: false,
     entity: "item",
     mode: "create",
-    data: null,
-  });
-  const [actionState, setActionState] = useState<ActionState>({
-    open: false,
-    entity: "item",
-    action: "delete",
     record: null,
   });
 
-  const openDialog = (
-    entity: FormEntity,
-    mode: FormMode,
-    data?: Record<string, unknown>
-  ) => {
-    setDialogState({ open: true, entity, mode, data: data ?? null });
-  };
+  const [actionState, setActionState] = useState<ActionState>({
+    open: false,
+    entity: "item",
+    record: null,
+  });
 
-  const closeDialog = () => setDialogState((prev) => ({ ...prev, open: false }));
+  const openDialog = useCallback((entity: FormEntity, mode: FormMode, record: unknown | null = null) => {
+    setDialogState({ open: true, entity, mode, record });
+  }, []);
 
-  const openActionDialog = (entity: FormEntity, record: Record<string, unknown>) => {
-    const hasTransactions = Boolean((record as { hasTransactions?: boolean }).hasTransactions);
-    const action: ActionType = hasTransactions ? "deactivate" : "delete";
-    setActionState({ open: true, entity, action, record });
-  };
+  const closeDialog = useCallback(() => {
+    setDialogState((prev) => ({ ...prev, open: false }));
+  }, []);
 
-  const closeActionDialog = () => setActionState((prev) => ({ ...prev, open: false }));
+  const openDelete = useCallback((entity: FormEntity, record: unknown) => {
+    setActionState({ open: true, entity, record });
+  }, []);
 
-  return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Masters</h1>
-        <p className="text-sm text-muted-foreground">
-          Maintain authoritative masters for items, production processes, and
-          Bill of Materials to keep the factory floor in sync.
-        </p>
-      </div>
+  const closeDelete = useCallback(() => {
+    setActionState((prev) => ({ ...prev, open: false }));
+  }, []);
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold">Master data overview</CardTitle>
-          <CardDescription>Snapshot of coverage and pending actions.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          {itemMetrics.map((metric) => (
-            <div key={metric.title} className="rounded-lg border bg-card/60 px-4 py-3">
-              <p className="text-xs font-medium text-muted-foreground uppercase">
-                {metric.title}
-              </p>
-              <p className="text-2xl font-semibold">{metric.value}</p>
-              <p className="text-xs text-muted-foreground">{metric.meta}</p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Tabs defaultValue="items" className="space-y-6">
-        <TabsList className="h-auto w-full justify-start gap-2 overflow-x-auto rounded-xl bg-muted p-1">
-          <TabsTrigger value="items" className="px-4 py-2">
-            Item Master
-          </TabsTrigger>
-          <TabsTrigger value="uom" className="px-4 py-2">
-            UOM Master
-          </TabsTrigger>
-          <TabsTrigger value="workers" className="px-4 py-2">
-            Worker Master
-          </TabsTrigger>
-          <TabsTrigger value="processes" className="px-4 py-2">
-            Process Master
-          </TabsTrigger>
-          <TabsTrigger value="bom" className="px-4 py-2">
-            BOM Master
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="items" className="space-y-4">
-          <ItemCatalogue
-            onCreate={() => openDialog("item", "create")}
-            onEdit={(record) => openDialog("item", "edit", record)}
-            onAction={(record) => openActionDialog("item", record)}
-          />
-        </TabsContent>
-
-        <TabsContent value="uom" className="space-y-4">
-          <UomCatalogue
-            onCreate={() => openDialog("uom", "create")}
-            onEdit={(record) => openDialog("uom", "edit", record)}
-            onAction={(record) => openActionDialog("uom", record)}
-          />
-        </TabsContent>
-
-        <TabsContent value="workers" className="space-y-4">
-          <WorkerCatalogue
-            onCreate={() => openDialog("worker", "create")}
-            onEdit={(record) => openDialog("worker", "edit", record)}
-            onAction={(record) => openActionDialog("worker", record)}
-          />
-        </TabsContent>
-
-        <TabsContent value="processes" className="space-y-4">
-          <ProcessBlueprint
-            onCreate={() => openDialog("process", "create")}
-            onEdit={(record) => openDialog("process", "edit", record)}
-            onAction={(record) => openActionDialog("process", record)}
-          />
-        </TabsContent>
-
-        <TabsContent value="bom" className="space-y-4">
-          <BomTemplates
-            onCreate={() => openDialog("bom", "create")}
-            onEdit={(record) => openDialog("bom", "edit", record)}
-            onAction={(record) => openActionDialog("bom", record)}
-          />
-        </TabsContent>
-      </Tabs>
-
-      <MasterFormDialog state={dialogState} onClose={closeDialog} />
-      <MasterActionDialog state={actionState} onClose={closeActionDialog} />
-    </div>
+  const refreshEntity = useCallback(
+    async (entity: FormEntity) => {
+      if (entity === "item") await contextValue.items.refresh();
+      if (entity === "uom") await contextValue.uoms.refresh();
+      if (entity === "worker") await contextValue.workers.refresh();
+      if (entity === "process") await contextValue.processes.refresh();
+      if (entity === "bom") await contextValue.bomTemplates.refresh();
+    },
+    [contextValue]
   );
-}
 
-type ItemCatalogueProps = {
-  onCreate: () => void;
-  onEdit: (record: typeof items[number]) => void;
-  onAction: (record: typeof items[number]) => void;
-};
+  const handleDelete = useCallback(async () => {
+    const { entity, record } = actionState;
+    if (!record) return;
 
-type RecordActionsProps = {
-  onEdit: () => void;
-  onAction: () => void;
-  actionLabel: string;
-  tone?: "default" | "destructive";
-  actionDisabled?: boolean;
-};
-
-function RecordActions({ onEdit, onAction, actionLabel, tone = "default", actionDisabled }: RecordActionsProps) {
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) {
-        return;
+    try {
+      if (entity === "item") {
+        const { id } = record as ItemRecord;
+        await request(`/api/items/${id}`, { method: "DELETE" });
+      } else if (entity === "uom") {
+        const { id } = record as UomRecord;
+        await request(`/api/uoms/${id}`, { method: "DELETE" });
+      } else if (entity === "worker") {
+        const { id } = record as WorkerRecord;
+        await request(`/api/workers/${id}`, { method: "DELETE" });
+      } else if (entity === "process") {
+        const { id } = record as ProcessRecord;
+        await request(`/api/processes/${id}`, { method: "DELETE" });
+      } else if (entity === "bom") {
+        const { id } = record as BomTemplateRecord;
+        await request(`/api/bom/templates/${id}`, { method: "DELETE" });
       }
-      setOpen(false);
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [open]);
-
-  const handleAction = (handler: () => void, disabled?: boolean) => () => {
-    if (disabled) return;
-    handler();
-    setOpen(false);
-  };
-
-  const actionClasses = tone === "destructive" ? "text-destructive hover:bg-destructive/10 focus-visible:bg-destructive/10" : "";
+      await refreshEntity(entity);
+    } catch (error) {
+      console.error(`Failed to delete ${entity}`, error);
+    } finally {
+      closeDelete();
+    }
+  }, [actionState, closeDelete, refreshEntity]);
 
   return (
-    <div className="relative inline-flex">
-      <Button
-        ref={triggerRef}
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
-        <MoreHorizontal className="h-4 w-4" />
-        <span className="sr-only">Open actions</span>
-      </Button>
-      {open ? (
-        <div
-          ref={menuRef}
-          className="absolute right-0 top-9 z-30 w-40 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-          role="menu"
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start"
-            onClick={handleAction(onEdit)}
-          >
-            Edit
-          </Button>
-          <div className="my-1 h-px bg-muted" />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className={cn("w-full justify-start", actionClasses, actionDisabled && "pointer-events-none opacity-50")}
-            onClick={handleAction(onAction, actionDisabled)}
-          >
-            {actionLabel}
-          </Button>
+    <MastersDataContext.Provider value={contextValue}>
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight">Masters</h1>
+          <p className="text-sm text-muted-foreground">
+            Maintain master data for items, processes, workers, units, and Bill of Materials.
+          </p>
         </div>
-      ) : null}
-    </div>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold">Overview</CardTitle>
+            <CardDescription>Key counts across master records.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-4">
+            {metrics.map((metric) => (
+              <div key={metric.title} className="rounded-lg border bg-card/60 px-4 py-3">
+                <p className="text-xs font-medium uppercase text-muted-foreground">{metric.title}</p>
+                <p className="text-2xl font-semibold">{metric.value}</p>
+                <p className="text-xs text-muted-foreground">{metric.meta}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Tabs defaultValue="items" className="space-y-6">
+          <TabsList className="h-auto w-full justify-start gap-2 overflow-x-auto rounded-xl bg-muted p-1">
+            <TabsTrigger value="items">Item Master</TabsTrigger>
+            <TabsTrigger value="uom">UOM Master</TabsTrigger>
+            <TabsTrigger value="workers">Worker Master</TabsTrigger>
+            <TabsTrigger value="processes">Process Master</TabsTrigger>
+            <TabsTrigger value="bom">BOM Master</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="items">
+            <ItemsSection onCreate={() => openDialog("item", "create")} onEdit={(record) => openDialog("item", "edit", record)} onDelete={(record) => openDelete("item", record)} />
+          </TabsContent>
+
+          <TabsContent value="uom">
+            <UomsSection onCreate={() => openDialog("uom", "create")} onEdit={(record) => openDialog("uom", "edit", record)} onDelete={(record) => openDelete("uom", record)} />
+          </TabsContent>
+
+          <TabsContent value="workers">
+            <WorkersSection onCreate={() => openDialog("worker", "create")} onEdit={(record) => openDialog("worker", "edit", record)} onDelete={(record) => openDelete("worker", record)} />
+          </TabsContent>
+
+          <TabsContent value="processes">
+            <ProcessesSection onCreate={() => openDialog("process", "create")} onEdit={(record) => openDialog("process", "edit", record)} onDelete={(record) => openDelete("process", record)} />
+          </TabsContent>
+
+          <TabsContent value="bom">
+            <BomSection
+              onCreate={() => openDialog("bom", "create")}
+              onEdit={(record) => openDialog("bom", "edit", record)}
+              onDelete={(record) => openDelete("bom", record)}
+            />
+          </TabsContent>
+        </Tabs>
+
+        <MasterFormDialog state={dialogState} onClose={closeDialog} onSuccess={async (entity) => {
+          await refreshEntity(entity);
+          closeDialog();
+        }} />
+
+        <MasterActionDialog state={actionState} onCancel={closeDelete} onConfirm={handleDelete} />
+      </div>
+    </MastersDataContext.Provider>
   );
 }
 
-function ItemCatalogue({ onCreate, onEdit, onAction }: ItemCatalogueProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+type SectionProps<T> = {
+  onCreate: () => void;
+  onEdit: (record: T) => void;
+  onDelete: (record: T) => void;
+};
 
-  const filteredItems = useMemo(() => {
+type ItemsSectionProps = SectionProps<ItemRecord>;
+
+const ItemsSection = ({ onCreate, onEdit, onDelete }: ItemsSectionProps) => {
+  const { items } = useMastersData();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [category, setCategory] = useState("all");
+  const [status, setStatus] = useState("all");
+
+  const filtered = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();
-    return items.filter((item) => {
+    return items.records.filter((item) => {
       const matchesSearch =
         !normalized ||
         item.sku.toLowerCase().includes(normalized) ||
         item.name.toLowerCase().includes(normalized) ||
-        item.vendor.toLowerCase().includes(normalized);
-
-      const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
-      const matchesStatus = statusFilter === "all" || item.status === statusFilter;
-
+        (item.vendor ?? "").toLowerCase().includes(normalized);
+      const matchesCategory = category === "all" || item.category === category;
+      const matchesStatus = status === "all" || item.status === status;
       return matchesSearch && matchesCategory && matchesStatus;
     });
-  }, [categoryFilter, searchTerm, statusFilter]);
-
-  const resetFilters = () => {
-    setSearchTerm("");
-    setCategoryFilter("all");
-    setStatusFilter("all");
-  };
+  }, [category, items.records, searchTerm, status]);
 
   return (
     <Card>
       <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-1">
           <CardTitle>Item catalogue</CardTitle>
-          <CardDescription>
-            Central registry of materials, consumables, and packaging with reorder visibility.
-          </CardDescription>
+          <CardDescription>Materials, consumables, and finished goods tracked in operations.</CardDescription>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={onCreate}>
-            Add item
-          </Button>
-        </div>
+        <Button size="sm" onClick={onCreate}>
+          <Plus className="mr-2 h-4 w-4" /> Add item
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Badge variant="secondary" className="bg-secondary text-secondary-foreground">
-              Showing: {filteredItems.length}
-            </Badge>
-            {(searchTerm || categoryFilter !== "all" || statusFilter !== "all") && (
-              <Button size="sm" variant="ghost" onClick={resetFilters}>
+            <Badge variant="secondary">Showing: {filtered.length}</Badge>
+            {(searchTerm || category !== "all" || status !== "all") && (
+              <Button variant="ghost" size="sm" onClick={() => {
+                setSearchTerm("");
+                setCategory("all");
+                setStatus("all");
+              }}>
                 Reset filters
               </Button>
             )}
@@ -704,28 +519,28 @@ function ItemCatalogue({ onCreate, onEdit, onAction }: ItemCatalogueProps) {
               placeholder="Search SKU, item, or vendor"
               className="w-full sm:w-[240px]"
             />
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="sm:w-[180px]">
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="sm:w-[200px]">
                 <SelectValue placeholder="Filter category" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All categories</SelectItem>
-                {itemCategories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
+                {itemCategoryOptions.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="sm:w-[160px]">
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className="sm:w-[180px]">
                 <SelectValue placeholder="Filter status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
-                {itemStatuses.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {status}
+                {itemStatusOptions.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -739,101 +554,109 @@ function ItemCatalogue({ onCreate, onEdit, onAction }: ItemCatalogueProps) {
               <TableHead>SKU</TableHead>
               <TableHead>Item</TableHead>
               <TableHead>Category</TableHead>
-              <TableHead className="text-center">Reorder point</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-[120px] text-right">Actions</TableHead>
+              <TableHead className="text-right">Updated</TableHead>
+              <TableHead className="w-[80px] text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredItems.map((item) => (
-              <TableRow key={item.sku}>
-                <TableCell className="font-medium">{item.sku}</TableCell>
-                <TableCell>
-                  <div className="space-y-1">
-                    <p>{item.name}</p>
-                    <p className="text-xs text-muted-foreground">UOM: {item.uom}</p>
-                  </div>
-                </TableCell>
-                <TableCell>{item.category}</TableCell>
-                <TableCell className="text-center">{item.reorder}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className={statusBadge[item.status]}>
-                    {item.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <RecordActions
-                    onEdit={() => onEdit(item)}
-                    onAction={() => onAction(item)}
-                    actionLabel={item.hasTransactions ? "Deactivate" : "Delete"}
-                    tone={item.hasTransactions ? "default" : "destructive"}
-                  />
+            {items.isLoading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                  Loading items…
                 </TableCell>
               </TableRow>
-            ))}
+            ) : items.error ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-sm text-rose-600">
+                  {items.error.message}
+                </TableCell>
+              </TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                  No items match the current filters.
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtered.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell className="font-medium">{item.sku}</TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <p>{item.name}</p>
+                      <p className="text-xs text-muted-foreground">UOM: {item.unit}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell>{item.category ?? "—"}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className={statusBadge[item.status ?? ""] ?? "border bg-muted text-muted-foreground"}>
+                      {item.status ?? "Unspecified"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right text-sm text-muted-foreground">
+                    {new Date(item.updated_at).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <RowActions onEdit={() => onEdit(item)} onDelete={() => onDelete(item)} />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
-
-        <div className="rounded-lg border border-dashed bg-muted/40 p-4 text-sm text-muted-foreground">
-          Reminder: Items flagged as <span className="font-medium text-amber-700">Reorder</span> appear on the procurement dashboard and trigger supply chain notifications.
-        </div>
       </CardContent>
     </Card>
   );
-}
-
-type UomCatalogueProps = {
-  onCreate: () => void;
-  onEdit: (record: typeof uoms[number]) => void;
-  onAction: (record: typeof uoms[number]) => void;
 };
 
-function UomCatalogue({ onCreate, onEdit, onAction }: UomCatalogueProps) {
+type UomsSectionProps = SectionProps<UomRecord>;
+
+const UomsSection = ({ onCreate, onEdit, onDelete }: UomsSectionProps) => {
+  const { uoms } = useMastersData();
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const filteredUoms = useMemo(() => {
+  const filtered = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();
-    return uoms.filter((unit) => {
+    return uoms.records.filter((uom) => {
       const matchesSearch =
         !normalized ||
-        unit.code.toLowerCase().includes(normalized) ||
-        unit.name.toLowerCase().includes(normalized) ||
-        unit.description.toLowerCase().includes(normalized);
-      const matchesType = typeFilter === "all" || unit.type === typeFilter;
-      const matchesStatus = statusFilter === "all" || unit.status === statusFilter;
+        uom.code.toLowerCase().includes(normalized) ||
+        uom.name.toLowerCase().includes(normalized) ||
+        (uom.description ?? "").toLowerCase().includes(normalized);
+      const matchesType = typeFilter === "all" || uom.type === typeFilter;
+      const matchesStatus = statusFilter === "all" || (uom.is_active ? "Active" : "Inactive") === statusFilter;
       return matchesSearch && matchesType && matchesStatus;
     });
-  }, [searchTerm, statusFilter, typeFilter]);
-
-  const resetFilters = () => {
-    setSearchTerm("");
-    setTypeFilter("all");
-    setStatusFilter("all");
-  };
+  }, [searchTerm, statusFilter, typeFilter, uoms.records]);
 
   return (
     <Card>
       <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-1">
-          <CardTitle>Unit of measure catalogue</CardTitle>
-          <CardDescription>Standardize how inventory and processes record quantities.</CardDescription>
+          <CardTitle>Units of measure</CardTitle>
+          <CardDescription>Standardised measurement references used across the system.</CardDescription>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={onCreate}>
-            Add unit
-          </Button>
-        </div>
+        <Button size="sm" onClick={onCreate}>
+          <Plus className="mr-2 h-4 w-4" /> Add unit
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Badge variant="secondary" className="bg-secondary text-secondary-foreground">
-              Showing: {filteredUoms.length}
-            </Badge>
+            <Badge variant="secondary">Showing: {filtered.length}</Badge>
             {(searchTerm || typeFilter !== "all" || statusFilter !== "all") && (
-              <Button size="sm" variant="ghost" onClick={resetFilters}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchTerm("");
+                  setTypeFilter("all");
+                  setStatusFilter("all");
+                }}
+              >
                 Reset filters
               </Button>
             )}
@@ -851,24 +674,21 @@ function UomCatalogue({ onCreate, onEdit, onAction }: UomCatalogueProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All types</SelectItem>
-                {uomTypes.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
+                {uomTypeOptions.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="sm:w-[160px]">
+              <SelectTrigger className="sm:w-[180px]">
                 <SelectValue placeholder="Filter status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
-                {uomStatuses.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {status}
-                  </SelectItem>
-                ))}
+                <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="Inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -883,99 +703,110 @@ function UomCatalogue({ onCreate, onEdit, onAction }: UomCatalogueProps) {
               <TableHead className="text-center">Precision</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Description</TableHead>
-              <TableHead className="w-[120px] text-right">Actions</TableHead>
+              <TableHead className="w-[80px] text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredUoms.map((unit) => (
-              <TableRow key={unit.code}>
-                <TableCell className="font-medium uppercase">{unit.code}</TableCell>
-                <TableCell>{unit.name}</TableCell>
-                <TableCell>{unit.type}</TableCell>
-                <TableCell className="text-center">{unit.precision}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className={statusBadge[unit.status]}>
-                    {unit.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="max-w-[280px] text-sm text-muted-foreground">
-                  {unit.description}
-                </TableCell>
-                <TableCell className="text-right">
-                  <RecordActions
-                    onEdit={() => onEdit(unit)}
-                    onAction={() => onAction(unit)}
-                    actionLabel={unit.hasTransactions ? "Deactivate" : "Delete"}
-                    tone={unit.hasTransactions ? "default" : "destructive"}
-                  />
+            {uoms.isLoading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                  Loading units…
                 </TableCell>
               </TableRow>
-            ))}
+            ) : uoms.error ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-sm text-rose-600">
+                  {uoms.error.message}
+                </TableCell>
+              </TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                  No units found for the current filters.
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtered.map((unit) => (
+                <TableRow key={unit.id}>
+                  <TableCell className="font-medium uppercase">{unit.code}</TableCell>
+                  <TableCell>{unit.name}</TableCell>
+                  <TableCell>{unit.type ?? "—"}</TableCell>
+                  <TableCell className="text-center">{unit.precision ?? 0}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className={unit.is_active ? statusBadge.Active : statusBadge.Inactive}>
+                      {unit.is_active ? "Active" : "Inactive"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{unit.description ?? "—"}</TableCell>
+                  <TableCell className="text-right">
+                    <RowActions onEdit={() => onEdit(unit)} onDelete={() => onDelete(unit)} />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
-        <div className="rounded-lg border border-dashed bg-muted/40 p-4 text-sm text-muted-foreground">
-          Tip: Keep only active units available for item selection. Deactivate legacy units instead of deleting them to preserve historical transactions.
-        </div>
       </CardContent>
     </Card>
   );
-}
-
-type WorkerCatalogueProps = {
-  onCreate: () => void;
-  onEdit: (record: typeof workers[number]) => void;
-  onAction: (record: typeof workers[number]) => void;
 };
 
-function WorkerCatalogue({ onCreate, onEdit, onAction }: WorkerCatalogueProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+type WorkersSectionProps = SectionProps<WorkerRecord>;
 
-  const filteredWorkers = useMemo(() => {
+const WorkersSection = ({ onCreate, onEdit, onDelete }: WorkersSectionProps) => {
+  const { workers } = useMastersData();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [department, setDepartment] = useState("all");
+  const [status, setStatus] = useState("all");
+
+  const departments = useMemo(() => {
+    const values = new Set<string>();
+    workers.records.forEach((worker) => {
+      if (worker.department) values.add(worker.department);
+    });
+    return Array.from(values).sort((a, b) => a.localeCompare(b));
+  }, [workers.records]);
+
+  const filtered = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();
-    return workers.filter((worker) => {
+    return workers.records.filter((worker) => {
       const matchesSearch =
         !normalized ||
         worker.code.toLowerCase().includes(normalized) ||
-        worker.name.toLowerCase().includes(normalized) ||
-        worker.role.toLowerCase().includes(normalized) ||
-        worker.department.toLowerCase().includes(normalized) ||
-        worker.skills.toLowerCase().includes(normalized);
-      const matchesDepartment =
-        departmentFilter === "all" || worker.department === departmentFilter;
-      const matchesStatus = statusFilter === "all" || worker.status === statusFilter;
+        worker.display_name.toLowerCase().includes(normalized) ||
+        (worker.role ?? "").toLowerCase().includes(normalized) ||
+        (worker.department ?? "").toLowerCase().includes(normalized);
+      const matchesDepartment = department === "all" || worker.department === department;
+      const matchesStatus = status === "all" || worker.status === status;
       return matchesSearch && matchesDepartment && matchesStatus;
     });
-  }, [departmentFilter, searchTerm, statusFilter]);
-
-  const resetFilters = () => {
-    setSearchTerm("");
-    setDepartmentFilter("all");
-    setStatusFilter("all");
-  };
+  }, [department, searchTerm, status, workers.records]);
 
   return (
     <Card>
       <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-1">
           <CardTitle>Worker directory</CardTitle>
-          <CardDescription>Maintain the roster of operators and inspectors available for allocation.</CardDescription>
+          <CardDescription>Operators, technicians, and supervisors available for allocation.</CardDescription>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={onCreate}>
-            Add worker
-          </Button>
-        </div>
+        <Button size="sm" onClick={onCreate}>
+          <Plus className="mr-2 h-4 w-4" /> Add worker
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Badge variant="secondary" className="bg-secondary text-secondary-foreground">
-              Showing: {filteredWorkers.length}
-            </Badge>
-            {(searchTerm || departmentFilter !== "all" || statusFilter !== "all") && (
-              <Button size="sm" variant="ghost" onClick={resetFilters}>
+            <Badge variant="secondary">Showing: {filtered.length}</Badge>
+            {(searchTerm || department !== "all" || status !== "all") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchTerm("");
+                  setDepartment("all");
+                  setStatus("all");
+                }}
+              >
                 Reset filters
               </Button>
             )}
@@ -984,31 +815,31 @@ function WorkerCatalogue({ onCreate, onEdit, onAction }: WorkerCatalogueProps) {
             <Input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search name, role, or code"
+              placeholder="Search name, code, or role"
               className="w-full sm:w-[240px]"
             />
-            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-              <SelectTrigger className="sm:w-[180px]">
+            <Select value={department} onValueChange={setDepartment}>
+              <SelectTrigger className="sm:w-[200px]">
                 <SelectValue placeholder="Filter department" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All departments</SelectItem>
-                {workerDepartments.map((department) => (
-                  <SelectItem key={department} value={department}>
-                    {department}
+                {departments.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="sm:w-[160px]">
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className="sm:w-[180px]">
                 <SelectValue placeholder="Filter status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
-                {workerStatuses.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {status}
+                {workerStatusOptions.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1023,229 +854,189 @@ function WorkerCatalogue({ onCreate, onEdit, onAction }: WorkerCatalogueProps) {
               <TableHead>Name</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Department</TableHead>
-              <TableHead>Shift</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Skills</TableHead>
-              <TableHead className="w-[120px] text-right">Actions</TableHead>
+              <TableHead className="w-[80px] text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredWorkers.map((worker) => (
-              <TableRow key={worker.code}>
-                <TableCell className="font-medium uppercase">{worker.code}</TableCell>
-                <TableCell>{worker.name}</TableCell>
-                <TableCell>{worker.role}</TableCell>
-                <TableCell>{worker.department}</TableCell>
-                <TableCell>{worker.shift}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className={statusBadge[worker.status]}>
-                    {worker.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="max-w-[280px] text-sm text-muted-foreground">
-                  {worker.skills}
-                </TableCell>
-                <TableCell className="text-right">
-                  <RecordActions
-                    onEdit={() => onEdit(worker)}
-                    onAction={() => onAction(worker)}
-                    actionLabel={worker.hasTransactions ? "Deactivate" : "Delete"}
-                    tone={worker.hasTransactions ? "default" : "destructive"}
-                  />
+            {workers.isLoading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                  Loading workers…
                 </TableCell>
               </TableRow>
-            ))}
+            ) : workers.error ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-sm text-rose-600">
+                  {workers.error.message}
+                </TableCell>
+              </TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                  No workers match the current filters.
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtered.map((worker) => (
+                <TableRow key={worker.id}>
+                  <TableCell className="font-medium uppercase">{worker.code}</TableCell>
+                  <TableCell>{worker.display_name}</TableCell>
+                  <TableCell>{worker.role ?? "—"}</TableCell>
+                  <TableCell>{worker.department ?? "—"}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className={statusBadge[worker.status ?? ""] ?? "border bg-muted text-muted-foreground"}>
+                      {worker.status ?? "Active"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <RowActions onEdit={() => onEdit(worker)} onDelete={() => onDelete(worker)} />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
-        <div className="rounded-lg border border-dashed bg-muted/40 p-4 text-sm text-muted-foreground">
-          Keep profiles updated so process owners can confidently assign the right operators and inspectors per shift.
-        </div>
       </CardContent>
     </Card>
   );
-}
-
-type ProcessBlueprintProps = {
-  onCreate: () => void;
-  onEdit: (record: typeof processes[number]) => void;
-  onAction: (record: typeof processes[number]) => void;
 };
 
-function ProcessBlueprint({ onCreate, onEdit, onAction }: ProcessBlueprintProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [workerFilter, setWorkerFilter] = useState("all");
+type ProcessesSectionProps = SectionProps<ProcessRecord>;
 
-  const filteredProcesses = useMemo(() => {
-    const normalized = searchTerm.trim().toLowerCase();
-    return processes.filter((process) => {
-      const matchesSearch =
-        !normalized ||
-        process.name.toLowerCase().includes(normalized) ||
-        process.summary.toLowerCase().includes(normalized);
-      const matchesWorker =
-        workerFilter === "all" || process.workers.includes(workerFilter);
-      return matchesSearch && matchesWorker;
-    });
-  }, [searchTerm, workerFilter]);
-
-  const resetFilters = () => {
-    setSearchTerm("");
-    setWorkerFilter("all");
-  };
+const ProcessesSection = ({ onCreate, onEdit, onDelete }: ProcessesSectionProps) => {
+  const { processes } = useMastersData();
 
   return (
     <Card>
       <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-1">
-          <CardTitle>Process blueprint</CardTitle>
-          <CardDescription>
-            Capture process context and assign the right shop-floor teams.
-          </CardDescription>
+          <CardTitle>Manufacturing processes</CardTitle>
+          <CardDescription>Ordered stages and supporting documentation.</CardDescription>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={onCreate}>
-            Add process
-          </Button>
-        </div>
+        <Button size="sm" onClick={onCreate}>
+          <Plus className="mr-2 h-4 w-4" /> Add process
+        </Button>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Badge variant="secondary" className="bg-secondary text-secondary-foreground">
-              Showing: {filteredProcesses.length}
-            </Badge>
-            {(searchTerm || workerFilter !== "all") && (
-              <Button size="sm" variant="ghost" onClick={resetFilters}>
-                Reset filters
-              </Button>
-            )}
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Input
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search process or summary"
-              className="w-full sm:w-[240px]"
-            />
-            <Select value={workerFilter} onValueChange={setWorkerFilter}>
-              <SelectTrigger className="sm:w-[220px]">
-                <SelectValue placeholder="Filter by worker" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All workers</SelectItem>
-                {workerOptions.map((worker) => (
-                  <SelectItem key={worker.code} value={worker.code}>
-                    {worker.name} ({worker.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {filteredProcesses.map((process) => {
-          const assigned = process.workers
-            .map((code) => workerDirectory[code])
-            .filter((worker): worker is typeof workers[number] => Boolean(worker));
-
-          return (
-            <Card key={process.name} className="border border-dashed bg-card/60">
-              <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-1">
-                  <CardTitle className="text-lg">{process.name}</CardTitle>
-                  <CardDescription>{process.summary}</CardDescription>
-                </div>
-                <div className="flex items-start">
-                  <RecordActions
-                    onEdit={() => onEdit(process)}
-                    onAction={() => onAction(process)}
-                    actionLabel={process.hasTransactions ? "Deactivate" : "Delete"}
-                    tone={process.hasTransactions ? "default" : "destructive"}
-                  />
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  {assigned.length > 0 ? (
-                    assigned.map((worker) => (
-                      <Badge key={worker.code} variant="outline" className="gap-1">
-                        <span className="font-medium uppercase">{worker.code}</span>
-                        <span>·</span>
-                        <span>{worker.name}</span>
-                        <span className="text-xs text-muted-foreground">({worker.role})</span>
+      <CardContent className="space-y-4">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Sequence</TableHead>
+              <TableHead>Process</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="w-[80px] text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {processes.isLoading ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                  Loading processes…
+                </TableCell>
+              </TableRow>
+            ) : processes.error ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-sm text-rose-600">
+                  {processes.error.message}
+                </TableCell>
+              </TableRow>
+            ) : processes.records.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                  No processes captured yet.
+                </TableCell>
+              </TableRow>
+            ) : (
+              processes.records
+                .slice()
+                .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
+                .map((process) => (
+                  <TableRow key={process.id}>
+                    <TableCell className="text-sm text-muted-foreground">{process.sequence ?? "—"}</TableCell>
+                    <TableCell className="font-medium">{process.name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{process.description ?? "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className={process.is_active ? statusBadge.Active : statusBadge.Inactive}>
+                        {process.is_active ? "Active" : "Inactive"}
                       </Badge>
-                    ))
-                  ) : (
-                    <span className="text-sm text-muted-foreground">No workers allocated yet.</span>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <RowActions onEdit={() => onEdit(process)} onDelete={() => onDelete(process)} />
+                    </TableCell>
+                  </TableRow>
+                ))
+            )}
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
   );
-}
-
-type BomTemplatesProps = {
-  onCreate: () => void;
-  onEdit: (record: typeof bomTemplates[number]) => void;
-  onAction: (record: typeof bomTemplates[number]) => void;
 };
 
-function BomTemplates({ onCreate, onEdit, onAction }: BomTemplatesProps) {
+type BomSectionProps = SectionProps<BomTemplateRecord>;
+
+const BomSection = ({ onCreate, onEdit, onDelete }: BomSectionProps) => {
+  const { bomTemplates, items, processes } = useMastersData();
   const [searchTerm, setSearchTerm] = useState("");
   const [processFilter, setProcessFilter] = useState("all");
 
-  const filteredTemplates = useMemo(() => {
+  const processDirectory = useMemo(() => {
+    return processes.records.reduce<Record<string, ProcessRecord>>((acc, process) => {
+      acc[process.id] = process;
+      return acc;
+    }, {});
+  }, [processes.records]);
+
+  const itemDirectory = useMemo(() => {
+    return items.records.reduce<Record<string, ItemRecord>>((acc, item) => {
+      acc[item.id] = item;
+      return acc;
+    }, {});
+  }, [items.records]);
+
+  const filtered = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();
-
-    return bomTemplates.filter((template) => {
-      const outputItem = itemDirectory[template.outputItem];
-      const matchesProcess = processFilter === "all" || template.process === processFilter;
-
+    return bomTemplates.records.filter((template) => {
+      const processName = template.process?.name ?? processDirectory[template.process_id ?? ""]?.name ?? "";
+      const outputItem = template.output_item_id ? itemDirectory[template.output_item_id] : null;
+      const matchesProcess = processFilter === "all" || processName === processFilter;
       const matchesSearch =
         !normalized ||
-        template.process.toLowerCase().includes(normalized) ||
-        template.sop.toLowerCase().includes(normalized) ||
-        template.components.some((component) => component.item.toLowerCase().includes(normalized)) ||
-        (outputItem &&
-          (outputItem.name.toLowerCase().includes(normalized) ||
-            outputItem.sku.toLowerCase().includes(normalized)));
-
+        template.code.toLowerCase().includes(normalized) ||
+        template.name.toLowerCase().includes(normalized) ||
+        processName.toLowerCase().includes(normalized) ||
+        template.components.some((component) => component.item?.name?.toLowerCase().includes(normalized) ?? false) ||
+        (outputItem?.name ?? "").toLowerCase().includes(normalized);
       return matchesProcess && matchesSearch;
     });
-  }, [processFilter, searchTerm]);
-
-  const resetFilters = () => {
-    setSearchTerm("");
-    setProcessFilter("all");
-  };
+  }, [bomTemplates.records, itemDirectory, processDirectory, processFilter, searchTerm]);
 
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-1">
           <CardTitle>BOM templates</CardTitle>
-          <CardDescription>
-            Standardize component requirements and SOPs for every output item.
-          </CardDescription>
+          <CardDescription>Define component breakdowns for finished goods.</CardDescription>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={onCreate}>
-            Create template
-          </Button>
-        </div>
+        <Button size="sm" onClick={onCreate}>
+          <Plus className="mr-2 h-4 w-4" /> New template
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Badge variant="secondary" className="bg-secondary text-secondary-foreground">
-              Showing: {filteredTemplates.length} / {bomTemplates.length}
-            </Badge>
+            <Badge variant="secondary">Showing: {filtered.length}</Badge>
             {(searchTerm || processFilter !== "all") && (
-              <Button size="sm" variant="ghost" onClick={resetFilters}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchTerm("");
+                  setProcessFilter("all");
+                }}
+              >
                 Reset filters
               </Button>
             )}
@@ -1254,18 +1045,18 @@ function BomTemplates({ onCreate, onEdit, onAction }: BomTemplatesProps) {
             <Input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search item, process, or component"
+              placeholder="Search template, item, or process"
               className="w-full sm:w-[260px]"
             />
             <Select value={processFilter} onValueChange={setProcessFilter}>
-              <SelectTrigger className="sm:w-[200px]">
+              <SelectTrigger className="sm:w-[220px]">
                 <SelectValue placeholder="Filter process" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All processes</SelectItem>
-                {processOptions.map((process) => (
-                  <SelectItem key={process} value={process}>
-                    {process}
+                {processes.records.map((process) => (
+                  <SelectItem key={process.id} value={process.name}>
+                    {process.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1274,427 +1065,189 @@ function BomTemplates({ onCreate, onEdit, onAction }: BomTemplatesProps) {
         </div>
 
         <div className="grid gap-4">
-          {filteredTemplates.map((template) => {
-            const outputItem = itemDirectory[template.outputItem];
-            const humanReadableSop =
-              template.sop.length > 220
-                ? `${template.sop.slice(0, 217)}…`
-                : template.sop;
+          {bomTemplates.isLoading ? (
+            <div className="rounded-lg border border-dashed bg-muted/40 p-6 text-center text-sm text-muted-foreground">
+              Loading templates…
+            </div>
+          ) : bomTemplates.error ? (
+            <div className="rounded-lg border border-dashed bg-rose-100/60 p-6 text-center text-sm text-rose-700">
+              {bomTemplates.error.message}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-lg border border-dashed bg-muted/40 p-6 text-center text-sm text-muted-foreground">
+              No BOM templates captured yet.
+            </div>
+          ) : (
+            filtered.map((template) => {
+              const outputItem = template.output_item_id ? itemDirectory[template.output_item_id] : null;
+              const processName = template.process?.name ?? processDirectory[template.process_id ?? ""]?.name ?? "—";
 
-            return (
-              <Card key={template.id} className="border border-dashed bg-card/60">
-                <CardContent className="grid gap-6 py-6 sm:grid-cols-[minmax(0,2.4fr)_minmax(0,1.2fr)]">
-                  <div className="space-y-4">
+              return (
+                <Card key={template.id} className="border border-dashed bg-card/60">
+                  <CardContent className="space-y-4 py-6">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="space-y-1">
-                        <p className="text-sm font-semibold text-primary">Item to be created</p>
-                        <h3 className="text-lg font-semibold leading-tight">
-                          {outputItem?.name ?? template.outputItem}
-                        </h3>
-                        <p className="text-xs text-muted-foreground">
-                          SKU: {outputItem?.sku ?? template.outputItem}
-                          {outputItem?.uom ? ` · UOM: ${outputItem.uom}` : ""}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Owner: {template.updatedBy}</p>
+                        <p className="text-xs font-semibold uppercase text-muted-foreground">Code</p>
+                        <h3 className="text-lg font-semibold leading-tight">{template.code}</h3>
+                        <p className="text-sm text-muted-foreground">{template.name}</p>
                       </div>
-                      <div className="space-y-1 text-right">
-                        <p className="text-sm font-semibold text-primary">Process</p>
-                        <p className="font-medium">{template.process}</p>
-                        <p className="text-xs text-muted-foreground">Last updated · {template.lastUpdated}</p>
+                      <div className="text-right">
+                        <Badge variant="secondary" className={template.is_active ? statusBadge.Active : statusBadge.Inactive}>
+                          {template.is_active ? "Active" : "Inactive"}
+                        </Badge>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="rounded-lg border bg-muted/40 px-4 py-2 text-center">
-                        <p className="text-xs font-semibold uppercase text-muted-foreground">Output qty</p>
-                        <p className="text-lg font-semibold">
-                          {template.outputQuantity}
-                          {outputItem?.uom ? (
-                            <span className="ml-1 text-xs uppercase text-muted-foreground">
-                              {outputItem.uom}
-                            </span>
-                          ) : null}
-                        </p>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase text-muted-foreground">Output item</p>
+                        <div className="rounded-lg border bg-muted/30 px-3 py-2">
+                          <p className="font-medium">{outputItem?.name ?? "Unmapped"}</p>
+                          <p className="text-xs text-muted-foreground">{outputItem?.sku ?? "No SKU mapped"}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase text-muted-foreground">Process</p>
+                        <div className="rounded-lg border bg-muted/30 px-3 py-2">
+                          <p className="font-medium">{processName}</p>
+                        </div>
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <p className="text-sm font-semibold text-primary">Items required</p>
+                      <p className="text-xs font-semibold uppercase text-muted-foreground">Components</p>
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {template.components.map((component) => {
-                          const componentItem = itemDirectory[component.item];
-                          return (
-                            <div
-                              key={`${template.id}-${component.item}`}
-                              className="flex items-center justify-between gap-3 rounded-lg border bg-background px-3 py-2 shadow-sm"
-                            >
-                              <div className="flex flex-col">
-                                <span className="text-sm font-medium leading-tight">
-                                  {componentItem?.name ?? component.item}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  SKU: {componentItem?.sku ?? component.item}
-                                </span>
-                              </div>
-                              <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wide">
-                                {component.quantity}
-                                {componentItem?.uom ? ` ${componentItem.uom}` : ""}
-                              </Badge>
+                        {template.components.length === 0 ? (
+                          <div className="rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                            No components listed.
+                          </div>
+                        ) : (
+                          template.components.map((component) => (
+                            <div key={component.id} className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm">
+                              <span>{component.item?.name ?? "Unknown item"}</span>
+                              <span className="text-muted-foreground">
+                                {component.expected_quantity ?? "—"} {component.unit}
+                              </span>
                             </div>
-                          );
-                        })}
+                          ))
+                        )}
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex flex-col justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-semibold text-primary">SOP overview</p>
-                      <p className="whitespace-pre-line rounded-lg border border-dashed bg-muted/30 p-3 text-sm text-muted-foreground">
-                        {humanReadableSop}
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Last updated: {new Date(template.updated_at).toLocaleDateString()}
                       </p>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => onEdit(template)}>
+                          Edit
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDelete(template)}>
+                          Delete
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex justify-end">
-                      <RecordActions
-                        onEdit={() => onEdit(template)}
-                        onAction={() => onAction(template)}
-                        actionLabel={template.hasTransactions ? "Deactivate" : "Delete"}
-                        tone={template.hasTransactions ? "default" : "destructive"}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        <div className="rounded-lg border border-dashed bg-muted/40 p-4 text-sm text-muted-foreground">
-          Keep SOP instructions concise so operators can reference critical checks without leaving the workstation.
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
         </div>
       </CardContent>
     </Card>
   );
-}
+};
 
-function MasterFormDialog({ state, onClose }: MasterFormDialogProps) {
-  const { open, entity, mode, data } = state;
+type RowActionsProps = {
+  onEdit: () => void;
+  onDelete: () => void;
+};
+
+const RowActions = ({ onEdit, onDelete }: RowActionsProps) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative inline-flex">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+        <span className="sr-only">Open actions</span>
+      </Button>
+      {open ? (
+        <div className="absolute right-0 top-9 z-30 w-36 rounded-md border bg-popover p-1 shadow-md">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start"
+            onClick={() => {
+              onEdit();
+              setOpen(false);
+            }}
+          >
+            Edit
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-destructive hover:bg-destructive/10"
+            onClick={() => {
+              onDelete();
+              setOpen(false);
+            }}
+          >
+            Delete
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+type MasterFormDialogProps = {
+  state: DialogState;
+  onClose: () => void;
+  onSuccess: (entity: FormEntity) => Promise<void>;
+};
+
+const MasterFormDialog = ({ state, onClose, onSuccess }: MasterFormDialogProps) => {
+  const { open, entity, mode, record } = state;
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         {entity === "item" ? (
-          <ItemFormDialog mode={mode} data={data} onClose={onClose} />
+          <ItemForm mode={mode} record={record as ItemRecord | null} onSuccess={() => onSuccess("item")} onCancel={onClose} />
         ) : entity === "uom" ? (
-          <UomFormDialog mode={mode} data={data} onClose={onClose} />
+          <UomForm mode={mode} record={record as UomRecord | null} onSuccess={() => onSuccess("uom")} onCancel={onClose} />
         ) : entity === "worker" ? (
-          <WorkerFormDialog mode={mode} data={data} onClose={onClose} />
+          <WorkerForm mode={mode} record={record as WorkerRecord | null} onSuccess={() => onSuccess("worker")} onCancel={onClose} />
         ) : entity === "process" ? (
-          <ProcessFormDialog mode={mode} data={data} onClose={onClose} />
+          <ProcessForm mode={mode} record={record as ProcessRecord | null} onSuccess={() => onSuccess("process")} onCancel={onClose} />
         ) : (
-          <BomFormDialog mode={mode} data={data} onClose={onClose} />
+          <BomForm mode={mode} record={record as BomTemplateRecord | null} onSuccess={() => onSuccess("bom")} onCancel={onClose} />
         )}
       </DialogContent>
     </Dialog>
   );
-}
-
-type MasterFormDialogProps = {
-  state: DialogState;
-  onClose: () => void;
 };
 
-type ItemFormDialogProps = {
-  mode: FormMode;
-  data?: Record<string, unknown> | null;
-  onClose: () => void;
+type MasterActionDialogProps = {
+  state: ActionState;
+  onCancel: () => void;
+  onConfirm: () => void;
 };
 
-type ProcessFormDialogProps = ItemFormDialogProps;
-type BomFormDialogProps = ItemFormDialogProps;
-type UomFormDialogProps = ItemFormDialogProps;
-type WorkerFormDialogProps = ItemFormDialogProps;
-
-type FieldProps<T extends Record<string, unknown>> = {
-  form: UseFormReturn<T>;
-  disableSku?: boolean;
-  disableName?: boolean;
-  disableCode?: boolean;
-  disableOutputItem?: boolean;
-};
-
-function buildItemDefaults(record?: Partial<typeof items[number]>): ItemFormValues {
-  return {
-    sku: record?.sku ?? "",
-    name: record?.name ?? "",
-    category: record?.category ?? "",
-    uom: record?.uom ?? "",
-    reorder: record?.reorder ?? "",
-    status: record?.status ?? "Active",
-    notes: "",
-  };
-}
-
-function buildProcessDefaults(record?: Partial<typeof processes[number]>): ProcessFormValues {
-  return {
-    name: record?.name ?? "",
-    summary: record?.summary ?? "",
-    workers: record?.workers ?? [],
-  };
-}
-
-function buildBomDefaults(record?: Partial<typeof bomTemplates[number]>): BomFormValues {
-  const components =
-    record?.components?.map((component) => ({
-      item: component.item ?? "",
-      quantity: component.quantity ?? "",
-    })) ?? [];
-
-  return {
-    outputItem: record?.outputItem ?? "",
-    process: record?.process ?? "",
-    outputQuantity: record?.outputQuantity ?? "",
-    components: components.length > 0 ? components : [{ item: "", quantity: "" }],
-    sop: record?.sop ?? "",
-  };
-}
-
-function buildUomDefaults(record?: Partial<typeof uoms[number]>): UomFormValues {
-  return {
-    code: record?.code ?? "",
-    name: record?.name ?? "",
-    type: record?.type ?? "",
-    precision: record?.precision ?? "",
-    status: record?.status ?? "Active",
-    description: record?.description ?? "",
-  };
-}
-
-function buildWorkerDefaults(record?: Partial<typeof workers[number]>): WorkerFormValues {
-  return {
-    code: record?.code ?? "",
-    name: record?.name ?? "",
-    role: record?.role ?? "",
-    department: record?.department ?? "",
-    shift: record?.shift ?? "",
-    status: record?.status ?? "Active",
-    skills: record?.skills ?? "",
-    contact: record?.contact ?? "",
-  };
-}
-
-function ItemFormDialog({ mode, data, onClose }: ItemFormDialogProps) {
-  const defaults = useMemo(() => buildItemDefaults(data as typeof items[number] | undefined), [data]);
-  const form = useForm<ItemFormValues>({ defaultValues: defaults });
-
-  useEffect(() => {
-    form.reset(defaults);
-  }, [defaults, form]);
-
-  const handleSubmit = form.handleSubmit((values) => {
-    console.info(`item:${mode}`, values);
-    onClose();
-  });
-
-  return (
-    <>
-      <DialogHeader className="space-y-2">
-        <DialogTitle>{mode === "create" ? "Create item" : "Edit item"}</DialogTitle>
-        <DialogDescription>Define catalogue, costing, and supplier details.</DialogDescription>
-      </DialogHeader>
-      <Form {...form}>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <ItemFields form={form} disableSku={mode === "edit"} />
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit">{mode === "create" ? "Create item" : "Save changes"}</Button>
-          </DialogFooter>
-        </form>
-      </Form>
-    </>
-  );
-}
-
-function UomFormDialog({ mode, data, onClose }: UomFormDialogProps) {
-  const defaults = useMemo(() => buildUomDefaults(data as typeof uoms[number] | undefined), [data]);
-  const form = useForm<UomFormValues>({ defaultValues: defaults });
-
-  useEffect(() => {
-    form.reset(defaults);
-  }, [defaults, form]);
-
-  const handleSubmit = form.handleSubmit((values) => {
-    console.info(`uom:${mode}`, values);
-    onClose();
-  });
-
-  return (
-    <>
-      <DialogHeader className="space-y-2">
-        <DialogTitle>{mode === "create" ? "Create unit of measure" : "Edit unit of measure"}</DialogTitle>
-        <DialogDescription>Maintain standardized measurement units for catalogues.</DialogDescription>
-      </DialogHeader>
-      <Form {...form}>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <UomFields form={form} disableCode={mode === "edit"} />
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit">{mode === "create" ? "Create unit" : "Save changes"}</Button>
-          </DialogFooter>
-        </form>
-      </Form>
-    </>
-  );
-}
-
-function WorkerFormDialog({ mode, data, onClose }: WorkerFormDialogProps) {
-  const defaults = useMemo(
-    () => buildWorkerDefaults(data as typeof workers[number] | undefined),
-    [data]
-  );
-  const form = useForm<WorkerFormValues>({ defaultValues: defaults });
-
-  useEffect(() => {
-    form.reset(defaults);
-  }, [defaults, form]);
-
-  const handleSubmit = form.handleSubmit((values) => {
-    console.info(`worker:${mode}`, values);
-    onClose();
-  });
-
-  return (
-    <>
-      <DialogHeader className="space-y-2">
-        <DialogTitle>{mode === "create" ? "Create worker" : "Edit worker"}</DialogTitle>
-        <DialogDescription>Capture operator details for process allocation.</DialogDescription>
-      </DialogHeader>
-      <Form {...form}>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <WorkerFields form={form} disableCode={mode === "edit"} />
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit">{mode === "create" ? "Create worker" : "Save changes"}</Button>
-          </DialogFooter>
-        </form>
-      </Form>
-    </>
-  );
-}
-
-function ProcessFormDialog({ mode, data, onClose }: ProcessFormDialogProps) {
-  const defaults = useMemo(
-    () => buildProcessDefaults(data as typeof processes[number] | undefined),
-    [data]
-  );
-  const form = useForm<ProcessFormValues>({ defaultValues: defaults });
-
-  useEffect(() => {
-    form.reset(defaults);
-  }, [defaults, form]);
-
-  const handleSubmit = form.handleSubmit((values) => {
-    console.info(`process:${mode}`, values);
-    onClose();
-  });
-
-  return (
-    <>
-      <DialogHeader className="space-y-2">
-        <DialogTitle>{mode === "create" ? "Create process" : "Edit process"}</DialogTitle>
-        <DialogDescription>Document the process summary and assign responsible workers.</DialogDescription>
-      </DialogHeader>
-      <Form {...form}>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <ProcessFields form={form} disableName={mode === "edit"} />
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit">{mode === "create" ? "Create process" : "Save changes"}</Button>
-          </DialogFooter>
-        </form>
-      </Form>
-    </>
-  );
-}
-
-function BomFormDialog({ mode, data, onClose }: BomFormDialogProps) {
-  const defaults = useMemo(() => buildBomDefaults(data as typeof bomTemplates[number] | undefined), [data]);
-  const form = useForm<BomFormValues>({ defaultValues: defaults });
-
-  useEffect(() => {
-    form.reset(defaults);
-  }, [defaults, form]);
-
-  const handleSubmit = form.handleSubmit((values) => {
-    console.info(`bom:${mode}`, values);
-    onClose();
-  });
-
-  return (
-    <>
-      <DialogHeader className="space-y-2">
-        <DialogTitle>{mode === "create" ? "Create BOM template" : "Edit BOM template"}</DialogTitle>
-        <DialogDescription>Configure material requirements and baseline costs.</DialogDescription>
-      </DialogHeader>
-      <Form {...form}>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <BomFields form={form} disableOutputItem={mode === "edit"} />
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit">{mode === "create" ? "Create template" : "Save changes"}</Button>
-          </DialogFooter>
-        </form>
-      </Form>
-    </>
-  );
-}
-
-
-function MasterActionDialog({ state, onClose }: { state: ActionState; onClose: () => void }) {
-  const { open, entity, action, record } = state;
-  const label = useMemo(() => {
-    if (!record) return "this record";
-    if (entity === "item") {
-      const { sku, name } = record as typeof items[number];
-      return `${sku ?? ""}${name ? ` – ${name}` : ""}`.trim();
-    }
-    if (entity === "uom") {
-      const { code, name } = record as typeof uoms[number];
-      const formatted = `${code ?? ""}${name ? ` – ${name}` : ""}`.trim();
-      return formatted.length > 0 ? formatted : "this unit";
-    }
-    if (entity === "worker") {
-      const { code, name } = record as typeof workers[number];
-      const formatted = `${code ?? ""}${name ? ` – ${name}` : ""}`.trim();
-      return formatted.length > 0 ? formatted : "this worker";
-    }
-    if (entity === "process") {
-      return (record as typeof processes[number])?.name ?? "this process";
-    }
-    if (entity === "bom") {
-      const template = record as typeof bomTemplates[number];
-      if (!template) return "this template";
-      const output = itemDirectory[template.outputItem];
-      if (output) {
-        return `${output.sku} – ${output.name}`;
-      }
-      return template.outputItem ?? "this template";
-    }
-    return "this record";
-  }, [entity, record]);
-
-  const actionLabel = action === "delete" ? "Delete" : "Deactivate";
-  const entityLabel =
+const MasterActionDialog = ({ state, onCancel, onConfirm }: MasterActionDialogProps) => {
+  const { open, entity } = state;
+  const label =
     entity === "item"
       ? "item"
       : entity === "uom"
@@ -1705,800 +1258,1177 @@ function MasterActionDialog({ state, onClose }: { state: ActionState; onClose: (
       ? "process"
       : "BOM template";
 
-  const handleConfirm = () => {
-    console.info(`[masters:${entity}] ${action}`, record);
-    onClose();
-  };
-
   return (
-    <AlertDialog open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
+    <AlertDialog open={open} onOpenChange={(next) => (!next ? onCancel() : null)}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>
-            {actionLabel} {entityLabel}
-          </AlertDialogTitle>
+          <AlertDialogTitle>Delete {label}</AlertDialogTitle>
           <AlertDialogDescription>
-            {action === "delete"
-              ? `Are you sure you want to permanently delete ${label}? This cannot be undone.`
-              : `Deactivate ${label} so it can no longer be selected in new transactions. Existing records remain untouched.`}
+            This action cannot be undone. All references to the {label} will no longer be available for new transactions.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onClose}>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleConfirm}
-            className={action === "delete" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : undefined}
-          >
-            {actionLabel}
+          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={onConfirm}>
+            Delete
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
   );
-}
+};
 
-function ItemFields({ form, disableSku }: FieldProps<ItemFormValues>) {
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField
-          control={form.control}
-          name="sku"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Item code</FormLabel>
-              <FormControl>
-                <Input placeholder="SFG-SLK-NTW-30D-HNK" {...field} disabled={disableSku} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Item name</FormLabel>
-              <FormControl>
-                <Input placeholder="Cotton Yarn 30s" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="category"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Select category</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {itemCategories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="uom"
-          rules={{ required: "Unit of measure is required" }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Unit of measure</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select unit of measure" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {uomOptions.map((unit) => (
-                    <SelectItem key={unit.code} value={unit.code}>
-                      {unit.code} – {unit.name}
-                      {unit.status !== "Active" ? " (Inactive)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="reorder"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Reorder point</FormLabel>
-              <FormControl>
-                <Input placeholder="Enter reorder threshold" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="status"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Status</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {itemStatuses.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {status}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </div>
+type ItemFormValues = {
+  sku: string;
+  name: string;
+  category: string;
+  unit: string;
+  unitCost: string;
+  reorderLevel: string;
+  status: string;
+  vendor: string;
+  notes: string;
+};
 
-      <FormField
-        control={form.control}
-        name="notes"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Notes</FormLabel>
-            <FormControl>
-              <Textarea rows={3} placeholder="Add handling instructions or sourcing notes" {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-    </div>
-  );
-}
+type ItemFormProps = {
+  mode: FormMode;
+  record: ItemRecord | null;
+  onSuccess: () => Promise<void>;
+  onCancel: () => void;
+};
 
-function UomFields({ form, disableCode }: FieldProps<UomFormValues>) {
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField
-          control={form.control}
-          name="code"
-          rules={{ required: "Code is required" }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Code</FormLabel>
-              <FormControl>
-                <Input placeholder="kg" {...field} disabled={disableCode} className="uppercase" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="name"
-          rules={{ required: "Name is required" }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Name</FormLabel>
-              <FormControl>
-                <Input placeholder="Kilogram" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="type"
-          rules={{ required: "Type is required" }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Type</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {uomTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="precision"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Precision</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g. 3" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="status"
-          rules={{ required: "Status is required" }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Status</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {uomStatuses.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {status}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </div>
+const ItemForm = ({ mode, record, onSuccess, onCancel }: ItemFormProps) => {
+  const defaults: ItemFormValues = {
+    sku: record?.sku ?? "",
+    name: record?.name ?? "",
+    category: record?.category ?? "",
+    unit: record?.unit ?? "",
+    unitCost: record?.unit_cost != null ? String(record.unit_cost) : "",
+    reorderLevel: record?.reorder_level != null ? String(record.reorder_level) : "",
+    status: record?.status ?? "",
+    vendor: record?.vendor ?? "",
+    notes: record?.notes ?? "",
+  };
 
-      <FormField
-        control={form.control}
-        name="description"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Description</FormLabel>
-            <FormControl>
-              <Textarea rows={3} placeholder="Add guidance on when to use this unit" {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-    </div>
-  );
-}
+  const form = useForm<ItemFormValues>({ defaultValues: defaults });
+  const [error, setError] = useState<string | null>(null);
+  const { uoms } = useMastersData();
 
-function WorkerFields({ form, disableCode }: FieldProps<WorkerFormValues>) {
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField
-          control={form.control}
-          name="code"
-          rules={{ required: "Worker code is required" }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Worker code</FormLabel>
-              <FormControl>
-                <Input placeholder="EMP-OPS-01" {...field} disabled={disableCode} className="uppercase" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="name"
-          rules={{ required: "Name is required" }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Full name</FormLabel>
-              <FormControl>
-                <Input placeholder="Operator name" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="role"
-          rules={{ required: "Role is required" }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Role</FormLabel>
-              <FormControl>
-                <Input placeholder="Loom operator" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="department"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Department</FormLabel>
-              <FormControl>
-                <Input placeholder="Weaving" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="shift"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Shift</FormLabel>
-              <FormControl>
-                <Input placeholder="Shift A" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="status"
-          rules={{ required: "Status is required" }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Status</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {workerStatuses.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {status}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </div>
-
-      <FormField
-        control={form.control}
-        name="skills"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Skills & certifications</FormLabel>
-            <FormControl>
-              <Textarea rows={3} placeholder="List key skills or certifications" {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-
-      <FormField
-        control={form.control}
-        name="contact"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Contact</FormLabel>
-            <FormControl>
-              <Input placeholder="Phone or email" {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-    </div>
-  );
-}
-
-function ProcessFields({ form, disableName }: FieldProps<ProcessFormValues>) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
-
-  const filteredWorkers = useMemo(() => {
-    const normalized = searchTerm.trim().toLowerCase();
-
-    return workerOptions.filter((worker) => {
-      const matchesDepartment =
-        departmentFilter === "all" || worker.department === departmentFilter;
-      const matchesSearch =
-        !normalized ||
-        worker.name.toLowerCase().includes(normalized) ||
-        worker.role.toLowerCase().includes(normalized) ||
-        worker.code.toLowerCase().includes(normalized);
-
-      return matchesDepartment && matchesSearch;
-    });
-  }, [departmentFilter, searchTerm]);
-
-  return (
-    <div className="space-y-6">
-      <FormField
-        control={form.control}
-        name="name"
-        rules={{ required: "Process name is required" }}
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Process name</FormLabel>
-            <FormControl>
-              <Input placeholder="Indigo Dyeing" {...field} disabled={disableName} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-
-      <FormField
-        control={form.control}
-        name="summary"
-        rules={{ required: "Process summary is required" }}
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Process summary</FormLabel>
-            <FormControl>
-              <Textarea
-                rows={4}
-                placeholder="Describe the scope, checkpoints, and quality notes for this process."
-                {...field}
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-
-      <FormField
-        control={form.control}
-        name="workers"
-        rules={{
-          validate: (value) => (value && value.length > 0 ? true : "Select at least one worker"),
-        }}
-        render={({ field }) => {
-          const selectedSet = new Set(field.value ?? []);
-          const selectedWorkers = Array.from(selectedSet)
-            .map((code) => workerDirectory[code])
-            .filter((worker): worker is typeof workers[number] => Boolean(worker));
-
-          const toggleWorker = (code: string) => {
-            const next = new Set(field.value ?? []);
-            if (next.has(code)) {
-              next.delete(code);
-            } else {
-              next.add(code);
-            }
-            field.onChange(Array.from(next));
-          };
-
-          const removeWorker = (code: string) => {
-            const next = new Set(field.value ?? []);
-            next.delete(code);
-            field.onChange(Array.from(next));
-          };
-
-          const resetFilters = () => {
-            setSearchTerm("");
-            setDepartmentFilter("all");
-          };
-
-          return (
-            <FormItem>
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <FormLabel>Allocated workers</FormLabel>
-                  <FormDescription>
-                    Search and filter the worker directory, then click to assign operators to this process.
-                  </FormDescription>
-                </div>
-
-                {selectedWorkers.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedWorkers.map((worker) => (
-                      <Badge
-                        key={worker.code}
-                        variant="secondary"
-                        className="flex items-center gap-2 rounded-full px-3 py-1 text-xs"
-                      >
-                        <span className="font-semibold uppercase tracking-wide">{worker.code}</span>
-                        <span className="text-sm font-medium">{worker.name}</span>
-                        <span className="text-xs text-muted-foreground">({worker.role})</span>
-                        <button
-                          type="button"
-                          onClick={() => removeWorker(worker.code)}
-                          aria-label={`Remove ${worker.name}`}
-                          className="ml-1 rounded-full p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <Input
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    placeholder="Search by name, role, or code"
-                    className="w-full sm:w-[260px]"
-                  />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                      <SelectTrigger className="sm:w-[200px]">
-                        <SelectValue placeholder="Filter department" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All departments</SelectItem>
-                        {workerDepartments.map((department) => (
-                          <SelectItem key={department} value={department}>
-                            {department}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {(searchTerm || departmentFilter !== "all") && (
-                      <Button type="button" variant="ghost" size="sm" onClick={resetFilters}>
-                        Reset
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {filteredWorkers.length > 0 ? (
-                    filteredWorkers.map((worker) => {
-                      const isSelected = selectedSet.has(worker.code);
-                      const isInactive = worker.status !== "Active";
-
-                      return (
-                        <button
-                          key={worker.code}
-                          type="button"
-                          className={cn(
-                            "flex w-full flex-col gap-3 rounded-lg border p-3 text-left shadow-sm transition",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                            isSelected
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-primary/50 hover:bg-accent/40"
-                          )}
-                          aria-pressed={isSelected}
-                          onClick={() => toggleWorker(worker.code)}
-                        >
-                          <div className="flex w-full items-start justify-between gap-3">
-                            <div className="flex flex-col gap-1">
-                              <span className="font-medium text-sm leading-none">
-                                {worker.name}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {worker.role} · {worker.code}
-                                {isInactive ? ` · ${worker.status}` : ""}
-                              </span>
-                            </div>
-                            <Badge variant="outline" className="text-[0.65rem] uppercase tracking-wide">
-                              {worker.department ?? "—"}
-                            </Badge>
-                          </div>
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <div className="col-span-full rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                      No workers match the current filters.
-                    </div>
-                  )}
-                </div>
-
-                <FormMessage />
-              </div>
-            </FormItem>
-          );
-        }}
-      />
-    </div>
-  );
-}
-
-function BomFields({ form, disableOutputItem }: FieldProps<BomFormValues>) {
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "components",
+  const onSubmit = form.handleSubmit(async (values) => {
+    setError(null);
+    try {
+      if (mode === "create") {
+        await request<ItemRecord>("/api/items", {
+          method: "POST",
+          body: JSON.stringify({
+            sku: values.sku,
+            name: values.name,
+            category: values.category || undefined,
+            unit: values.unit,
+            unitCost: values.unitCost ? Number(values.unitCost) : undefined,
+            reorderLevel: values.reorderLevel ? Number(values.reorderLevel) : undefined,
+            status: values.status || undefined,
+            vendor: values.vendor || undefined,
+            notes: values.notes || undefined,
+          }),
+        });
+      } else if (record) {
+        await request<ItemRecord>(`/api/items/${record.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            sku: values.sku,
+            name: values.name,
+            category: values.category || null,
+            unit: values.unit,
+            unitCost: values.unitCost ? Number(values.unitCost) : null,
+            reorderLevel: values.reorderLevel ? Number(values.reorderLevel) : null,
+            status: values.status || null,
+            vendor: values.vendor || null,
+            notes: values.notes || null,
+          }),
+        });
+      }
+      await onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save item");
+    }
   });
 
-  const addComponent = () => append({ item: "", quantity: "" });
+  return (
+    <>
+      <DialogHeader className="space-y-2">
+        <DialogTitle>{mode === "create" ? "Create item" : "Edit item"}</DialogTitle>
+        <DialogDescription>Define catalogue, costing, and sourcing information.</DialogDescription>
+      </DialogHeader>
+      <Form {...form}>
+        <form onSubmit={onSubmit} className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="sku"
+              rules={{ required: "SKU is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>SKU</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. RM-COT-20D" {...field} disabled={mode === "edit"} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="name"
+              rules={{ required: "Name is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Item name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Category" {...field} />
+                  </FormControl>
+                  <FormDescription>Use categories to group items in reports.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="unit"
+              rules={{ required: "Unit is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Unit</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select unit" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {uoms.records.map((uom) => (
+                        <SelectItem key={uom.id} value={uom.code}>
+                          {uom.code.toUpperCase()} – {uom.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="unitCost"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Unit cost</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" placeholder="e.g. 45.5" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="reorderLevel"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Reorder level</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" placeholder="e.g. 200" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {itemStatusOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="vendor"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Vendor</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Supplier name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="notes"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Notes</FormLabel>
+                <FormControl>
+                  <Textarea rows={3} placeholder="Additional handling or sourcing notes" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit">{mode === "create" ? "Create item" : "Save changes"}</Button>
+          </DialogFooter>
+        </form>
+      </Form>
+    </>
+  );
+};
+
+type UomFormValues = {
+  code: string;
+  name: string;
+  type: string;
+  precision: string;
+  status: string;
+  description: string;
+};
+
+type UomFormProps = {
+  mode: FormMode;
+  record: UomRecord | null;
+  onSuccess: () => Promise<void>;
+  onCancel: () => void;
+};
+
+const UomForm = ({ mode, record, onSuccess, onCancel }: UomFormProps) => {
+  const defaults: UomFormValues = {
+    code: record?.code ?? "",
+    name: record?.name ?? "",
+    type: record?.type ?? "",
+    precision: record?.precision != null ? String(record.precision) : "",
+    status: record ? (record.is_active ? "Active" : "Inactive") : "Active",
+    description: record?.description ?? "",
+  };
+
+  const form = useForm<UomFormValues>({ defaultValues: defaults });
+  const [error, setError] = useState<string | null>(null);
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    setError(null);
+    try {
+      if (mode === "create") {
+        await request<UomRecord>("/api/uoms", {
+          method: "POST",
+          body: JSON.stringify({
+            code: values.code,
+            name: values.name,
+            type: values.type || undefined,
+            precision: values.precision ? Number(values.precision) : undefined,
+            status: values.status || undefined,
+            description: values.description || undefined,
+          }),
+        });
+      } else if (record) {
+        await request<UomRecord>(`/api/uoms/${record.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            code: values.code,
+            name: values.name,
+            type: values.type || null,
+            precision: values.precision ? Number(values.precision) : null,
+            status: values.status || null,
+            description: values.description || null,
+          }),
+        });
+      }
+      await onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save unit");
+    }
+  });
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField
-          control={form.control}
-          name="outputItem"
-          rules={{ required: "Select the item to be produced" }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Item to be created</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value} disabled={disableOutputItem}>
-                <FormControl>
-                  <SelectTrigger disabled={disableOutputItem}>
-                    <SelectValue placeholder="Choose parent item" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {itemOptions.map((item) => (
-                    <SelectItem key={item.sku} value={item.sku}>
-                      {item.name} ({item.sku})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="process"
-          rules={{ required: "Select the production process" }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Process</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose process" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {processOptions.map((process) => (
-                    <SelectItem key={process} value={process}>
-                      {process}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="outputQuantity"
-          rules={{ required: "Specify the output quantity" }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Output quantity</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g. 500" {...field} />
-              </FormControl>
-              <FormDescription>Enter the quantity produced per batch.</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </div>
+    <>
+      <DialogHeader className="space-y-2">
+        <DialogTitle>{mode === "create" ? "Create unit of measure" : "Edit unit of measure"}</DialogTitle>
+        <DialogDescription>Standardise measurement units across catalogue and transactions.</DialogDescription>
+      </DialogHeader>
+      <Form {...form}>
+        <form onSubmit={onSubmit} className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="code"
+              rules={{ required: "Code is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Code</FormLabel>
+                  <FormControl>
+                    <Input placeholder="kg" {...field} disabled={mode === "edit"} className="uppercase" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="name"
+              rules={{ required: "Name is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Kilogram" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Type</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {uomTypeOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="precision"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Precision</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 3" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="Inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
-      <FormField
-        control={form.control}
-        name="components"
-        rules={{
-          validate: (value) => (value && value.length > 0 ? true : "Add at least one required item"),
-        }}
-        render={({ field: _field }) => (
-          <FormItem>
-            {void _field}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <FormLabel>Items required</FormLabel>
-                <FormDescription>List each component and the quantity needed for this BOM.</FormDescription>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={addComponent}>
-                Add component
-              </Button>
-            </div>
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description</FormLabel>
+                <FormControl>
+                  <Textarea rows={3} placeholder="Guidance on when to use this unit" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-            <div className="space-y-3">
-              {fields.map((component, index) => (
-                <div
-                  key={component.id}
-                  className="grid gap-3 sm:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_auto] sm:items-center"
-                >
-                  <FormField
-                    control={form.control}
-                    name={`components.${index}.item` as const}
-                    rules={{ required: "Select an item" }}
-                    render={({ field }) => (
-                      <FormItem>
-                        {index === 0 && <FormLabel className="sm:hidden">Component item</FormLabel>}
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select item" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {itemOptions.map((item) => (
-                              <SelectItem key={item.sku} value={item.sku}>
-                                {item.name} ({item.sku})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={`components.${index}.quantity` as const}
-                    rules={{ required: "Enter quantity" }}
-                    render={({ field }) => (
-                      <FormItem>
-                        {index === 0 && <FormLabel className="sm:hidden">Quantity</FormLabel>}
-                        <FormControl>
-                          <Input placeholder="e.g. 25" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="text-muted-foreground"
-                    onClick={() => remove(index)}
-                    disabled={fields.length === 1}
-                    aria-label="Remove component"
-                  >
-                    <X className="h-4 w-4" />
+          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit">{mode === "create" ? "Create unit" : "Save changes"}</Button>
+          </DialogFooter>
+        </form>
+      </Form>
+    </>
+  );
+};
+
+type WorkerFormValues = {
+  code: string;
+  name: string;
+  role: string;
+  department: string;
+  shift: string;
+  status: string;
+  contact: string;
+  skills: string;
+};
+
+type WorkerFormProps = {
+  mode: FormMode;
+  record: WorkerRecord | null;
+  onSuccess: () => Promise<void>;
+  onCancel: () => void;
+};
+
+const WorkerForm = ({ mode, record, onSuccess, onCancel }: WorkerFormProps) => {
+  const defaults: WorkerFormValues = {
+    code: record?.code ?? "",
+    name: record?.display_name ?? "",
+    role: record?.role ?? "",
+    department: record?.department ?? "",
+    shift: record?.shift ?? "",
+    status: record?.status ?? "Active",
+    contact: record?.contact ?? "",
+    skills: record?.skills ?? "",
+  };
+
+  const form = useForm<WorkerFormValues>({ defaultValues: defaults });
+  const [error, setError] = useState<string | null>(null);
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    setError(null);
+    try {
+      if (mode === "create") {
+        await request<WorkerRecord>("/api/workers", {
+          method: "POST",
+          body: JSON.stringify({
+            code: values.code,
+            name: values.name,
+            role: values.role || undefined,
+            department: values.department || undefined,
+            shift: values.shift || undefined,
+            status: values.status || undefined,
+            contact: values.contact || undefined,
+            skills: values.skills || undefined,
+          }),
+        });
+      } else if (record) {
+        await request<WorkerRecord>(`/api/workers/${record.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            code: values.code,
+            name: values.name,
+            role: values.role || null,
+            department: values.department || null,
+            shift: values.shift || null,
+            status: values.status || null,
+            contact: values.contact || null,
+            skills: values.skills || null,
+          }),
+        });
+      }
+      await onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save worker");
+    }
+  });
+
+  return (
+    <>
+      <DialogHeader className="space-y-2">
+        <DialogTitle>{mode === "create" ? "Create worker" : "Edit worker"}</DialogTitle>
+        <DialogDescription>Record operator details for scheduling and compliance.</DialogDescription>
+      </DialogHeader>
+      <Form {...form}>
+        <form onSubmit={onSubmit} className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="code"
+              rules={{ required: "Code is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Code</FormLabel>
+                  <FormControl>
+                    <Input placeholder="EMP-001" {...field} disabled={mode === "edit"} className="uppercase" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="name"
+              rules={{ required: "Name is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Full name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="role"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Role</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Operator role" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="department"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Department</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Department" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="shift"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Shift</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Shift" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {workerStatusOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="contact"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contact</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Phone or email" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="skills"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Skills</FormLabel>
+                <FormControl>
+                  <Textarea rows={3} placeholder="Comma separated skills" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit">{mode === "create" ? "Create worker" : "Save changes"}</Button>
+          </DialogFooter>
+        </form>
+      </Form>
+    </>
+  );
+};
+
+type ProcessFormValues = {
+  slug: string;
+  name: string;
+  description: string;
+  sequence: string;
+  isActive: boolean;
+};
+
+type ProcessFormProps = {
+  mode: FormMode;
+  record: ProcessRecord | null;
+  onSuccess: () => Promise<void>;
+  onCancel: () => void;
+};
+
+const ProcessForm = ({ mode, record, onSuccess, onCancel }: ProcessFormProps) => {
+  const defaults: ProcessFormValues = {
+    slug: record?.slug ?? "",
+    name: record?.name ?? "",
+    description: record?.description ?? "",
+    sequence: record?.sequence != null ? String(record.sequence) : "",
+    isActive: record?.is_active ?? true,
+  };
+
+  const form = useForm<ProcessFormValues>({ defaultValues: defaults });
+  const [error, setError] = useState<string | null>(null);
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    setError(null);
+    try {
+      if (mode === "create") {
+        await request<ProcessRecord>("/api/processes", {
+          method: "POST",
+          body: JSON.stringify({
+            slug: values.slug,
+            name: values.name,
+            description: values.description || undefined,
+            sequence: values.sequence ? Number(values.sequence) : undefined,
+            isActive: values.isActive,
+          }),
+        });
+      } else if (record) {
+        await request<ProcessRecord>(`/api/processes/${record.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            slug: values.slug,
+            name: values.name,
+            description: values.description || null,
+            sequence: values.sequence ? Number(values.sequence) : null,
+            isActive: values.isActive,
+          }),
+        });
+      }
+      await onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save process");
+    }
+  });
+
+  return (
+    <>
+      <DialogHeader className="space-y-2">
+        <DialogTitle>{mode === "create" ? "Create process" : "Edit process"}</DialogTitle>
+        <DialogDescription>Document manufacturing stages with sequencing and notes.</DialogDescription>
+      </DialogHeader>
+      <Form {...form}>
+        <form onSubmit={onSubmit} className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="slug"
+              rules={{ required: "Slug is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Slug</FormLabel>
+                  <FormControl>
+                    <Input placeholder="primary-twisting" {...field} disabled={mode === "edit"} />
+                  </FormControl>
+                  <FormDescription>Lowercase with hyphens. Used for URLs and references.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="name"
+              rules={{ required: "Name is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Process name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="sequence"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Sequence</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="Order index" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="isActive"
+              render={({ field }) => (
+                <FormItem className="flex flex-col justify-end">
+                  <FormLabel>Status</FormLabel>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant={field.value ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => field.onChange(true)}
+                    >
+                      Active
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={!field.value ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => field.onChange(false)}
+                    >
+                      Inactive
+                    </Button>
+                  </div>
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description</FormLabel>
+                <FormControl>
+                  <Textarea rows={4} placeholder="Process notes" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit">{mode === "create" ? "Create process" : "Save changes"}</Button>
+          </DialogFooter>
+        </form>
+      </Form>
+    </>
+  );
+};
+
+type BomComponentFormValues = {
+  itemId: string;
+  unit: string;
+  expectedQuantity: string;
+};
+
+type BomFormValues = {
+  code: string;
+  name: string;
+  processId: string;
+  outputItemId: string;
+  outputQuantity: string;
+  instructions: string;
+  isActive: boolean;
+  components: BomComponentFormValues[];
+};
+
+type BomFormProps = {
+  mode: FormMode;
+  record: BomTemplateRecord | null;
+  onSuccess: () => Promise<void>;
+  onCancel: () => void;
+};
+
+const BomForm = ({ mode, record, onSuccess, onCancel }: BomFormProps) => {
+  const { items, processes } = useMastersData();
+  const defaults: BomFormValues = {
+    code: record?.code ?? "",
+    name: record?.name ?? "",
+    processId: record?.process_id ?? record?.process?.id ?? "",
+    outputItemId: record?.output_item_id ?? "",
+    outputQuantity: record?.output_quantity != null ? String(record.output_quantity) : "",
+    instructions: record?.instructions ?? "",
+    isActive: record?.is_active ?? true,
+    components:
+      record?.components?.map((component) => ({
+        itemId: component.item?.id ?? "",
+        unit: component.unit,
+        expectedQuantity: component.expected_quantity != null ? String(component.expected_quantity) : "",
+      })) ?? [{ itemId: "", unit: "", expectedQuantity: "" }],
+  };
+
+  const form = useForm<BomFormValues>({ defaultValues: defaults });
+  const { fields, append, remove } = useFieldArray({ control: form.control, name: "components" });
+  const [error, setError] = useState<string | null>(null);
+
+  const addComponent = useCallback(() => {
+    append({ itemId: "", unit: "", expectedQuantity: "" });
+  }, [append]);
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    setError(null);
+    try {
+      const payload = {
+        code: values.code,
+        name: values.name,
+        processId: values.processId,
+        outputItemId: values.outputItemId || undefined,
+        outputQuantity: values.outputQuantity ? Number(values.outputQuantity) : undefined,
+        instructions: values.instructions || undefined,
+        isActive: values.isActive,
+        components: values.components
+          .filter((component) => component.itemId && component.unit)
+          .map((component, index) => ({
+            itemId: component.itemId,
+            unit: component.unit,
+            expectedQuantity: component.expectedQuantity ? Number(component.expectedQuantity) : undefined,
+            position: index,
+          })),
+      };
+
+      if (mode === "create") {
+        await request<BomTemplateRecord>("/api/bom/templates", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      } else if (record) {
+        await request<BomTemplateRecord>(`/api/bom/templates/${record.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+      }
+
+      await onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save template");
+    }
+  });
+
+  return (
+    <>
+      <DialogHeader className="space-y-2">
+        <DialogTitle>{mode === "create" ? "Create BOM template" : "Edit BOM template"}</DialogTitle>
+        <DialogDescription>Capture standard component breakdowns and SOP guidance.</DialogDescription>
+      </DialogHeader>
+      <Form {...form}>
+        <form onSubmit={onSubmit} className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="code"
+              rules={{ required: "Code is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Code</FormLabel>
+                  <FormControl>
+                    <Input placeholder="BOM-001" {...field} disabled={mode === "edit"} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="name"
+              rules={{ required: "Name is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Template name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="processId"
+              rules={{ required: "Process is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Process</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select process" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {processes.records.map((process) => (
+                        <SelectItem key={process.id} value={process.id}>
+                          {process.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="outputItemId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Output item</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select item" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {items.records.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name} ({item.sku})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="outputQuantity"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Output quantity</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" placeholder="e.g. 500" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="isActive"
+              render={({ field }) => (
+                <FormItem className="flex flex-col justify-end">
+                  <FormLabel>Status</FormLabel>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant={field.value ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => field.onChange(true)}
+                    >
+                      Active
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={!field.value ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => field.onChange(false)}
+                    >
+                      Inactive
+                    </Button>
+                  </div>
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="components"
+            rules={{
+              validate: (value) => value.some((component) => component.itemId && component.unit) || "Add at least one component",
+            }}
+            render={({ field }) => (
+              <FormItem>
+                {void field}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <FormLabel>Components</FormLabel>
+                    <FormDescription>List items required for this template.</FormDescription>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={addComponent}>
+                    Add component
                   </Button>
                 </div>
-              ))}
-            </div>
+                <div className="space-y-3">
+                  {fields.map((component, index) => (
+                    <div
+                      key={component.id}
+                      className="grid gap-3 sm:grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center"
+                    >
+                      <FormField
+                        control={form.control}
+                        name={`components.${index}.itemId` as const}
+                        rules={{ required: "Select an item" }}
+                        render={({ field: itemField }) => (
+                          <FormItem>
+                            {index === 0 && <FormLabel className="sm:hidden">Item</FormLabel>}
+                            <Select value={itemField.value} onValueChange={itemField.onChange}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select item" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {items.records.map((item) => (
+                                  <SelectItem key={item.id} value={item.id}>
+                                    {item.name} ({item.sku})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`components.${index}.expectedQuantity` as const}
+                        rules={{ required: "Quantity" }}
+                        render={({ field: qtyField }) => (
+                          <FormItem>
+                            {index === 0 && <FormLabel className="sm:hidden">Quantity</FormLabel>}
+                            <FormControl>
+                              <Input type="number" step="0.01" placeholder="e.g. 25" {...qtyField} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`components.${index}.unit` as const}
+                        rules={{ required: "Unit" }}
+                        render={({ field: unitField }) => (
+                          <FormItem>
+                            {index === 0 && <FormLabel className="sm:hidden">Unit</FormLabel>}
+                            <FormControl>
+                              <Input placeholder="kg" {...unitField} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground"
+                        onClick={() => remove(index)}
+                        disabled={fields.length === 1}
+                        aria-label="Remove component"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+          <FormField
+            control={form.control}
+            name="instructions"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Instructions</FormLabel>
+                <FormControl>
+                  <Textarea rows={4} placeholder="SOP or production notes" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-      <FormField
-        control={form.control}
-        name="sop"
-        rules={{ required: "Document the SOP" }}
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>SOP / production notes</FormLabel>
-            <FormControl>
-              <Textarea rows={4} placeholder="Outline key steps, checkpoints, and sign-offs" {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-    </div>
+          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit">{mode === "create" ? "Create template" : "Save changes"}</Button>
+          </DialogFooter>
+        </form>
+      </Form>
+    </>
   );
-}
+};
