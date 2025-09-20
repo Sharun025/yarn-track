@@ -1,23 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import {
   BarChart3,
   Box,
   ClipboardList,
+  LayoutDashboard,
   PanelLeftClose,
   PanelLeftOpen,
   Repeat,
-  LayoutDashboard,
   Workflow,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { CollapsibleNavButton } from "@/components/ui/collapsible-nav-button";
+import {
+  Sidebar as SidebarRoot,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarSection,
+  SidebarSectionLabel,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -51,99 +65,92 @@ const navSections: NavSection[] = [
   },
 ];
 
-type SidebarProps = {
+type AppSidebarProps = {
   className?: string;
-  collapsed?: boolean;
-  onToggleCollapsed?: (next: boolean) => void;
 };
 
-export function Sidebar({ className, collapsed: collapsedProp, onToggleCollapsed }: SidebarProps) {
+export function AppSidebar({ className }: AppSidebarProps) {
   const pathname = usePathname();
-  const [collapsedInternal, setCollapsedInternal] = useState(false);
-  const collapsed = collapsedProp ?? collapsedInternal;
+  const { collapsed, setCollapsed } = useSidebar();
 
-  const toggleCollapsed = () => {
-    if (onToggleCollapsed) {
-      onToggleCollapsed(!collapsed);
-    } else {
-      setCollapsedInternal((prev) => !prev);
-    }
-  };
+  const sections = useMemo(() => navSections, []);
+  const showLabels = !collapsed;
 
   return (
-    <aside
-      data-collapsed={collapsed}
-      className={cn(
-        "group/sidebar flex h-full flex-col overflow-hidden border-r bg-card px-5 py-6 transition-[width] duration-200 ease-in-out",
-        collapsed ? "w-20 px-3" : "w-72",
-        className
-      )}
-    >
-      <div className="flex h-full flex-col">
-        <div className="space-y-6">
-          <div className="flex items-center">
-            <div
-              className={cn(
-                "flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-sm font-semibold text-primary transition-all duration-200",
-                !collapsed && "w-12 text-base"
-              )}
-            >
-              {collapsed ? "YT" : "Y"}
-            </div>
-            <div
-              className="overflow-hidden pl-3 transition-[max-width,opacity] duration-200"
-              style={{ maxWidth: collapsed ? 0 : 200, opacity: collapsed ? 0 : 1 }}
-            >
-              <div className="space-y-1">
-                <h1 className="text-lg font-semibold leading-none">Yarn Tracker</h1>
-                <p className="text-sm text-muted-foreground">Factory production control</p>
-              </div>
-            </div>
-          </div>
-
-          <nav className="space-y-4">
-            {navSections.map((section) => (
-              <div key={section.title} className="space-y-2">
-                {!collapsed && (
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {section.title}
-                  </span>
-                )}
-                <div className="grid gap-1">
-                  {section.items.map((item) => {
-                    const isActive = pathname === item.href;
-                    const Icon = item.icon;
-                    return (
-                      <CollapsibleNavButton
-                        key={item.href}
-                        href={item.href}
-                        icon={Icon}
-                        label={item.label}
-                        active={isActive}
-                        collapsed={collapsed}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </nav>
-        </div>
-
-        <Button
-          variant="outline"
-          size="sm"
+    <SidebarRoot className={className}>
+      <SidebarHeader className="flex items-center gap-3">
+        <div
           className={cn(
-            "mt-auto w-full justify-center gap-2 border-dashed transition-all duration-200",
+            "flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-sm font-semibold text-primary transition-all duration-200",
+            showLabels && "w-12 text-base"
+          )}
+        >
+          {showLabels ? "Y" : "YT"}
+        </div>
+        {showLabels ? (
+          <div className="flex-1 space-y-1 overflow-hidden">
+            <Link href="/dashboard" className="block whitespace-nowrap text-lg font-semibold">
+              Yarn Tracker
+            </Link>
+            <p className="text-sm text-muted-foreground">Factory production control</p>
+          </div>
+        ) : null}
+      </SidebarHeader>
+
+      <SidebarContent>
+        {sections.map((section) => (
+          <SidebarSection key={section.title}>
+            {showLabels ? <SidebarSectionLabel>{section.title}</SidebarSectionLabel> : null}
+            <SidebarMenu>
+              {section.items.map((item) => {
+                const isActive = pathname === item.href;
+                const Icon = item.icon;
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      href={item.href}
+                      active={isActive}
+                      collapsed={!showLabels}
+                      className={cn(
+                        "gap-3",
+                        showLabels ? "justify-start" : "justify-center px-2"
+                      )}
+                      title={!showLabels ? item.label : undefined}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {showLabels ? <span className="flex-1 truncate text-sm">{item.label}</span> : null}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarSection>
+        ))}
+      </SidebarContent>
+
+      <SidebarFooter>
+        <SidebarTrigger
+          className={cn(
+            "mt-4 w-full justify-center gap-2 border-dashed",
             collapsed && "h-10 w-10 self-center rounded-xl px-0"
           )}
-          onClick={toggleCollapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           {!collapsed && <span className="text-sm">Collapse sidebar</span>}
-        </Button>
-      </div>
-    </aside>
+        </SidebarTrigger>
+      </SidebarFooter>
+
+      <SidebarRail
+        className="absolute right-0 top-1/2 hidden -translate-y-1/2 translate-x-1/2 lg:flex"
+        onClick={() => setCollapsed(false)}
+        aria-label="Expand sidebar"
+      />
+    </SidebarRoot>
   );
 }
+
+export function AppSidebarProvider({ children }: { children: React.ReactNode }) {
+  return <SidebarProvider>{children}</SidebarProvider>;
+}
+
+export { SidebarInset } from "@/components/ui/sidebar";
