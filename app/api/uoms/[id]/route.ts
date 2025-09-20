@@ -1,8 +1,7 @@
-import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { prisma } from "@/lib/prisma";
+import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
 import { uomUpdateSchema } from "@/lib/validation";
 
 export async function GET(
@@ -10,15 +9,25 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const uom = await prisma.uom.findUnique({
-      where: { id: params.id },
-    });
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("uoms")
+      .select("*")
+      .eq("id", params.id)
+      .maybeSingle();
 
-    if (!uom) {
+    if (error) {
+      return failure("Unable to fetch unit of measure", {
+        status: 500,
+        details: error.message,
+      });
+    }
+
+    if (!data) {
       return failure("Unit of measure not found", { status: 404 });
     }
 
-    return success(uom);
+    return success(data);
   } catch (error) {
     return failure("Unable to fetch unit of measure", {
       status: 500,
@@ -57,30 +66,34 @@ export async function PATCH(
   }
 
   try {
-    const uom = await prisma.uom.update({
-      where: { id: params.id },
-      data,
-    });
+    const supabase = getSupabaseServerClient();
+    const { data: updated, error } = await supabase
+      .from("uoms")
+      .update(data)
+      .eq("id", params.id)
+      .select("*")
+      .maybeSingle();
 
-    return success(uom);
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
+    if (error) {
+      if (error.code === "23505") {
+        return failure("Unable to update unit of measure", {
+          status: 409,
+          details: error.message,
+        });
+      }
+
       return failure("Unable to update unit of measure", {
-        status: 409,
+        status: 500,
         details: error.message,
       });
     }
 
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
+    if (!updated) {
       return failure("Unit of measure not found", { status: 404 });
     }
 
+    return success(updated);
+  } catch (error) {
     return failure("Unable to update unit of measure", {
       status: 500,
       details: error instanceof Error ? error.message : String(error),
@@ -93,17 +106,24 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.uom.delete({
-      where: { id: params.id },
-    });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
+    const supabase = getSupabaseServerClient();
+    const { error, count } = await supabase
+      .from("uoms")
+      .delete({ count: "exact" })
+      .eq("id", params.id);
+
+    if (error) {
+      return failure("Unable to delete unit of measure", {
+        status: 500,
+        details: error.message,
+      });
+    }
+
+    if (!count) {
       return failure("Unit of measure not found", { status: 404 });
     }
 
+  } catch (error) {
     return failure("Unable to delete unit of measure", {
       status: 500,
       details: error instanceof Error ? error.message : String(error),

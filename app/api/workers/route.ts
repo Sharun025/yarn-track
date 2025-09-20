@@ -1,8 +1,8 @@
-import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { prisma } from "@/lib/prisma";
+import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
+import { buildIlikePattern } from "@/lib/utils";
 import { workerCreateSchema } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
@@ -11,36 +11,42 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("search");
   const department = searchParams.get("department");
 
-  const where: Prisma.WorkerWhereInput = {};
-
-  if (status) {
-    where.status = status;
-  }
-
-  if (department) {
-    where.department = department;
-  }
-
-  if (search) {
-    const value = search.trim();
-    if (value.length > 0) {
-      where.OR = [
-        { code: { contains: value, mode: "insensitive" } },
-        { display_name: { contains: value, mode: "insensitive" } },
-      ];
-    }
-  }
-
   try {
-    const workers = await prisma.worker.findMany({
-      where,
-      orderBy: [
-        { display_name: "asc" },
-        { code: "asc" },
-      ],
-    });
+    const supabase = getSupabaseServerClient();
+    let query = supabase
+      .from("workers")
+      .select("*")
+      .order("display_name", { ascending: true })
+      .order("code", { ascending: true });
 
-    return success(workers);
+    if (status) {
+      query = query.eq("status", status);
+    }
+
+    if (department) {
+      query = query.eq("department", department);
+    }
+
+    if (search) {
+      const value = search.trim();
+      if (value.length > 0) {
+        const pattern = buildIlikePattern(value);
+        query = query.or(
+          `code.ilike.${pattern},display_name.ilike.${pattern}`
+        );
+      }
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      return failure("Unable to fetch workers", {
+        status: 500,
+        details: error.message,
+      });
+    }
+
+    return success(data ?? []);
   } catch (error) {
     return failure("Unable to fetch workers", {
       status: 500,
@@ -64,8 +70,10 @@ export async function POST(request: NextRequest) {
     parsed.data;
 
   try {
-    const worker = await prisma.worker.create({
-      data: {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("workers")
+      .insert({
         code,
         display_name: name,
         role: role ?? null,
@@ -74,21 +82,26 @@ export async function POST(request: NextRequest) {
         status: status ?? null,
         contact: contact ?? null,
         skills: skills ?? null,
-      },
-    });
+      })
+      .select("*")
+      .single();
 
-    return success(worker, 201);
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
+    if (error) {
+      if (error.code === "23505") {
+        return failure("Unable to create worker", {
+          status: 409,
+          details: error.message,
+        });
+      }
+
       return failure("Unable to create worker", {
-        status: 409,
+        status: 500,
         details: error.message,
       });
     }
 
+    return success(data, 201);
+  } catch (error) {
     return failure("Unable to create worker", {
       status: 500,
       details: error instanceof Error ? error.message : String(error),

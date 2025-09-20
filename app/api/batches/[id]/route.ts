@@ -1,9 +1,8 @@
-import { Prisma, batch_status } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { BATCH_INCLUDE } from "@/lib/selects";
-import { prisma } from "@/lib/prisma";
+import { BATCH_SELECT } from "@/lib/selects";
+import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
 import { batchUpdateSchema } from "@/lib/validation";
 
 export async function GET(
@@ -11,16 +10,25 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const batch = await prisma.batch.findUnique({
-      where: { id: params.id },
-      include: BATCH_INCLUDE,
-    });
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("batches")
+      .select(BATCH_SELECT)
+      .eq("id", params.id)
+      .maybeSingle();
 
-    if (!batch) {
+    if (error) {
+      return failure("Unable to fetch batch", {
+        status: 500,
+        details: error.message,
+      });
+    }
+
+    if (!data) {
       return failure("Batch not found", { status: 404 });
     }
 
-    return success(batch);
+    return success(data);
   } catch (error) {
     return failure("Unable to fetch batch", {
       status: 500,
@@ -59,12 +67,12 @@ export async function PATCH(
     notes,
   } = parsed.data;
 
-  const data: Prisma.BatchUpdateInput = {};
+  const data: Record<string, unknown> = {};
 
   if (code !== undefined) data.code = code;
   if (processId !== undefined) data.process_id = processId;
   if (bomTemplateId !== undefined) data.bom_template_id = bomTemplateId ?? null;
-  if (status !== undefined) data.status = status as batch_status;
+  if (status !== undefined) data.status = status ?? null;
   if (plannedQuantity !== undefined) data.planned_quantity = plannedQuantity ?? null;
   if (inputQuantity !== undefined) data.input_quantity = inputQuantity ?? null;
   if (outputQuantity !== undefined) data.output_quantity = outputQuantity ?? null;
@@ -81,31 +89,34 @@ export async function PATCH(
   }
 
   try {
-    const batch = await prisma.batch.update({
-      where: { id: params.id },
-      data,
-      include: BATCH_INCLUDE,
-    });
+    const supabase = getSupabaseServerClient();
+    const { data: updated, error } = await supabase
+      .from("batches")
+      .update(data)
+      .eq("id", params.id)
+      .select(BATCH_SELECT)
+      .maybeSingle();
 
-    return success(batch);
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
+    if (error) {
+      if (error.code === "23505") {
+        return failure("Unable to update batch", {
+          status: 409,
+          details: error.message,
+        });
+      }
+
       return failure("Unable to update batch", {
-        status: 409,
+        status: 500,
         details: error.message,
       });
     }
 
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
+    if (!updated) {
       return failure("Batch not found", { status: 404 });
     }
 
+    return success(updated);
+  } catch (error) {
     return failure("Unable to update batch", {
       status: 500,
       details: error instanceof Error ? error.message : String(error),
@@ -118,17 +129,24 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.batch.delete({
-      where: { id: params.id },
-    });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
+    const supabase = getSupabaseServerClient();
+    const { error, count } = await supabase
+      .from("batches")
+      .delete({ count: "exact" })
+      .eq("id", params.id);
+
+    if (error) {
+      return failure("Unable to delete batch", {
+        status: 500,
+        details: error.message,
+      });
+    }
+
+    if (!count) {
       return failure("Batch not found", { status: 404 });
     }
 
+  } catch (error) {
     return failure("Unable to delete batch", {
       status: 500,
       details: error instanceof Error ? error.message : String(error),

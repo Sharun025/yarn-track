@@ -1,8 +1,8 @@
-import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { prisma } from "@/lib/prisma";
+import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
+import { buildIlikePattern } from "@/lib/utils";
 import { itemCreateSchema } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
@@ -10,29 +10,34 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get("status");
   const search = searchParams.get("search");
 
-  const where: Prisma.ItemWhereInput = {};
-
-  if (status) {
-    where.status = status;
-  }
-
-  if (search) {
-    const value = search.trim();
-    if (value.length > 0) {
-      where.OR = [
-        { name: { contains: value, mode: "insensitive" } },
-        { sku: { contains: value, mode: "insensitive" } },
-      ];
-    }
-  }
-
   try {
-    const items = await prisma.item.findMany({
-      where,
-      orderBy: { name: "asc" },
-    });
+    const supabase = getSupabaseServerClient();
+    let query = supabase.from("items").select("*").order("name", { ascending: true });
 
-    return success(items);
+    if (status) {
+      query = query.eq("status", status);
+    }
+
+    if (search) {
+      const value = search.trim();
+      if (value.length > 0) {
+        const pattern = buildIlikePattern(value);
+        query = query.or(
+          `name.ilike.${pattern},sku.ilike.${pattern}`
+        );
+      }
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      return failure("Unable to fetch items", {
+        status: 500,
+        details: error.message,
+      });
+    }
+
+    return success(data ?? []);
   } catch (error) {
     return failure("Unable to fetch items", {
       status: 500,
@@ -53,8 +58,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const item = await prisma.item.create({
-      data: {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("items")
+      .insert({
         sku: parsed.data.sku,
         name: parsed.data.name,
         category: parsed.data.category ?? null,
@@ -64,21 +71,26 @@ export async function POST(request: NextRequest) {
         status: parsed.data.status ?? null,
         vendor: parsed.data.vendor ?? null,
         notes: parsed.data.notes ?? null,
-      },
-    });
+      })
+      .select("*")
+      .single();
 
-    return success(item, 201);
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
+    if (error) {
+      if (error.code === "23505") {
+        return failure("Unable to create item", {
+          status: 409,
+          details: error.message,
+        });
+      }
+
       return failure("Unable to create item", {
-        status: 409,
+        status: 500,
         details: error.message,
       });
     }
 
+    return success(data, 201);
+  } catch (error) {
     return failure("Unable to create item", {
       status: 500,
       details: error instanceof Error ? error.message : String(error),

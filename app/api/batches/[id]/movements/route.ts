@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { BATCH_MOVEMENT_INCLUDE } from "@/lib/selects";
-import { prisma } from "@/lib/prisma";
+import { BATCH_MOVEMENT_SELECT } from "@/lib/selects";
+import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
 import { batchMovementCreateSchema } from "@/lib/validation";
 
 export async function GET(
@@ -10,13 +10,21 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const movements = await prisma.batchMovement.findMany({
-      where: { batch_id: params.id },
-      orderBy: { occurred_at: "desc" },
-      include: BATCH_MOVEMENT_INCLUDE,
-    });
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("batch_movements")
+      .select(BATCH_MOVEMENT_SELECT)
+      .eq("batch_id", params.id)
+      .order("occurred_at", { ascending: false });
 
-    return success(movements);
+    if (error) {
+      return failure("Unable to fetch batch movements", {
+        status: 500,
+        details: error.message,
+      });
+    }
+
+    return success(data ?? []);
   } catch (error) {
     return failure("Unable to fetch batch movements", {
       status: 500,
@@ -55,8 +63,10 @@ export async function POST(
   } = parsed.data;
 
   try {
-    const movement = await prisma.batchMovement.create({
-      data: {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("batch_movements")
+      .insert({
         batch_id: batchId,
         from_process_id: fromProcessId ?? null,
         to_process_id: toProcessId ?? null,
@@ -64,11 +74,18 @@ export async function POST(
         occurred_at: occurredAt ?? new Date().toISOString(),
         notes: notes ?? null,
         recorded_by: recordedBy ?? null,
-      },
-      include: BATCH_MOVEMENT_INCLUDE,
-    });
+      })
+      .select(BATCH_MOVEMENT_SELECT)
+      .single();
 
-    return success(movement, 201);
+    if (error) {
+      return failure("Unable to create batch movement", {
+        status: 500,
+        details: error.message,
+      });
+    }
+
+    return success(data, 201);
   } catch (error) {
     return failure("Unable to create batch movement", {
       status: 500,
