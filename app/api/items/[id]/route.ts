@@ -1,32 +1,30 @@
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
+import { prisma } from "@/lib/prisma";
 import { itemUpdateSchema } from "@/lib/validation";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("items")
-    .select("*")
-    .eq("id", params.id)
-    .maybeSingle();
+  try {
+    const item = await prisma.item.findUnique({
+      where: { id: params.id },
+    });
 
-  if (error) {
+    if (!item) {
+      return failure("Item not found", { status: 404 });
+    }
+
+    return success(item);
+  } catch (error) {
     return failure("Unable to fetch item", {
       status: 500,
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  if (!data) {
-    return failure("Item not found", { status: 404 });
-  }
-
-  return success(data);
 }
 
 export async function PATCH(
@@ -43,7 +41,6 @@ export async function PATCH(
     });
   }
 
-  const updates: Record<string, unknown> = {};
   const {
     sku,
     name,
@@ -56,57 +53,73 @@ export async function PATCH(
     notes,
   } = parsed.data;
 
-  if (sku !== undefined) updates.sku = sku;
-  if (name !== undefined) updates.name = name;
-  if (category !== undefined) updates.category = category ?? null;
-  if (unit !== undefined) updates.unit = unit;
-  if (unitCost !== undefined) updates.unit_cost = unitCost ?? null;
-  if (reorderLevel !== undefined) updates.reorder_level = reorderLevel ?? null;
-  if (status !== undefined) updates.status = status ?? null;
-  if (vendor !== undefined) updates.vendor = vendor ?? null;
-  if (notes !== undefined) updates.notes = notes ?? null;
+  const data: Record<string, unknown> = {};
 
-  if (Object.keys(updates).length === 0) {
+  if (sku !== undefined) data.sku = sku;
+  if (name !== undefined) data.name = name;
+  if (category !== undefined) data.category = category ?? null;
+  if (unit !== undefined) data.unit = unit;
+  if (unitCost !== undefined) data.unit_cost = unitCost ?? null;
+  if (reorderLevel !== undefined) data.reorder_level = reorderLevel ?? null;
+  if (status !== undefined) data.status = status ?? null;
+  if (vendor !== undefined) data.vendor = vendor ?? null;
+  if (notes !== undefined) data.notes = notes ?? null;
+
+  if (Object.keys(data).length === 0) {
     return failure("Nothing to update", { status: 400 });
   }
 
-  const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("items")
-    .update(updates)
-    .eq("id", params.id)
-    .select("*")
-    .maybeSingle();
+  try {
+    const item = await prisma.item.update({
+      where: { id: params.id },
+      data,
+    });
 
-  if (error) {
-    const statusCode = error.code === "23505" ? 409 : 500;
+    return success(item);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return failure("Unable to update item", {
+        status: 409,
+        details: error.message,
+      });
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return failure("Item not found", { status: 404 });
+    }
+
     return failure("Unable to update item", {
-      status: statusCode,
-      details: error.message,
+      status: 500,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  if (!data) {
-    return failure("Item not found", { status: 404 });
-  }
-
-  return success(data);
 }
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const supabase = getSupabaseServerClient();
-  const { error } = await supabase
-    .from("items")
-    .delete()
-    .eq("id", params.id);
+  try {
+    await prisma.item.delete({
+      where: { id: params.id },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return failure("Item not found", { status: 404 });
+    }
 
-  if (error) {
     return failure("Unable to delete item", {
       status: 500,
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
 

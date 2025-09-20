@@ -1,0 +1,232 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum user_role {
+  admin
+  manager
+  supervisor
+}
+
+enum batch_status {
+  draft
+  scheduled
+  in_progress
+  paused
+  awaiting_qc
+  completed
+  cancelled
+}
+
+model Profile {
+  id           String        @id @db.Uuid
+  role         user_role     @default(supervisor)
+  display_name String
+  phone        String?
+  created_at   DateTime      @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+  updated_at   DateTime      @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+
+  created_templates BomTemplate[] @relation("BomTemplateCreatedBy")
+  created_batches   Batch[]       @relation("BatchCreatedBy")
+  supervised_batches Batch[]      @relation("BatchSupervisor")
+  recorded_movements BatchMovement[] @relation("BatchMovementRecordedBy")
+  recorded_usages    BomUsage[]      @relation("BomUsageRecordedBy")
+
+  @@map("profiles")
+}
+
+model Process {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug        String           @unique
+  name        String           @unique
+  description String?          @db.Text
+  sequence    Int?
+  is_active   Boolean          @default(true)
+  created_at  DateTime         @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+  updated_at  DateTime         @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+
+  bom_templates     BomTemplate[]
+  batches           Batch[]
+  process_workers   ProcessWorker[]
+  movements_from    BatchMovement[] @relation("BatchMovementFromProcess")
+  movements_to      BatchMovement[] @relation("BatchMovementToProcess")
+
+  @@map("processes")
+}
+
+model Item {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sku           String           @unique
+  name          String
+  category      String?
+  unit          String
+  unit_cost     Decimal?         @db.Decimal(14, 4)
+  reorder_level Decimal?         @db.Decimal(14, 4)
+  status        String?
+  vendor        String?
+  notes         String?
+  created_at    DateTime         @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+  updated_at    DateTime         @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+
+  output_templates BomTemplate[]   @relation("BomTemplateOutputItem")
+  template_items   BomTemplateItem[]
+  usages           BomUsage[]
+
+  @@map("items")
+}
+
+model BomTemplate {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code           String            @unique
+  name           String
+  process_id     String            @db.Uuid
+  output_item_id String?           @db.Uuid
+  output_quantity Decimal?         @db.Decimal(14, 4)
+  instructions   String?
+  is_active      Boolean           @default(true)
+  created_by     String?           @db.Uuid
+  created_at     DateTime          @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+  updated_at     DateTime          @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+
+  process    Process    @relation(fields: [process_id], references: [id])
+  output_item Item?     @relation("BomTemplateOutputItem", fields: [output_item_id], references: [id])
+  creator     Profile?  @relation("BomTemplateCreatedBy", fields: [created_by], references: [id])
+  components  BomTemplateItem[]
+  batches     Batch[]
+
+  @@map("bom_templates")
+}
+
+model BomTemplateItem {
+  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bom_template_id   String      @db.Uuid
+  item_id           String      @db.Uuid
+  expected_quantity Decimal     @db.Decimal(14, 4)
+  unit              String
+  position          Int?
+  created_at        DateTime    @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+
+  bom_template BomTemplate @relation(fields: [bom_template_id], references: [id])
+  item         Item        @relation(fields: [item_id], references: [id])
+
+  @@unique([bom_template_id, item_id], map: "bom_template_items_unique_component")
+  @@map("bom_template_items")
+}
+
+model Batch {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code              String        @unique
+  process_id        String        @db.Uuid
+  bom_template_id   String?       @db.Uuid
+  status            batch_status  @default(scheduled)
+  planned_quantity  Decimal?      @db.Decimal(14, 4)
+  input_quantity    Decimal?      @db.Decimal(14, 4)
+  output_quantity   Decimal?      @db.Decimal(14, 4)
+  wastage_percentage Decimal?     @db.Decimal(7, 4)
+  started_at        DateTime?     @db.Timestamptz(6)
+  completed_at      DateTime?     @db.Timestamptz(6)
+  supervisor_id     String?       @db.Uuid
+  created_by        String?       @db.Uuid
+  notes             String?
+  created_at        DateTime      @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+  updated_at        DateTime      @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+
+  process    Process   @relation(fields: [process_id], references: [id])
+  bom_template BomTemplate? @relation(fields: [bom_template_id], references: [id])
+  supervisor Profile? @relation("BatchSupervisor", fields: [supervisor_id], references: [id])
+  creator    Profile? @relation("BatchCreatedBy", fields: [created_by], references: [id])
+  movements  BatchMovement[]
+  usages     BomUsage[]
+
+  @@index([process_id, status], map: "batches_process_status_idx")
+  @@map("batches")
+}
+
+model BatchMovement {
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batch_id        String     @db.Uuid
+  from_process_id String?    @db.Uuid
+  to_process_id   String?    @db.Uuid
+  quantity        Decimal?   @db.Decimal(14, 4)
+  recorded_by     String?    @db.Uuid
+  occurred_at     DateTime   @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+  notes           String?
+
+  batch        Batch    @relation(fields: [batch_id], references: [id])
+  from_process Process? @relation("BatchMovementFromProcess", fields: [from_process_id], references: [id])
+  to_process   Process? @relation("BatchMovementToProcess", fields: [to_process_id], references: [id])
+  recorder     Profile? @relation("BatchMovementRecordedBy", fields: [recorded_by], references: [id])
+
+  @@index([batch_id, occurred_at], map: "batch_movements_batch_idx")
+  @@map("batch_movements")
+}
+
+model BomUsage {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batch_id          String    @db.Uuid
+  item_id           String    @db.Uuid
+  expected_quantity Decimal?  @db.Decimal(14, 4)
+  actual_quantity   Decimal   @db.Decimal(14, 4)
+  unit              String
+  recorded_by       String?   @db.Uuid
+  recorded_at       DateTime  @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+  notes             String?
+
+  batch   Batch   @relation(fields: [batch_id], references: [id])
+  item    Item    @relation(fields: [item_id], references: [id])
+  recorder Profile? @relation("BomUsageRecordedBy", fields: [recorded_by], references: [id])
+
+  @@unique([batch_id, item_id], map: "bom_usage_batch_item_idx")
+  @@map("bom_usage")
+}
+
+model Uom {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique
+  name        String
+  type        String?
+  precision   Int?
+  description String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+  updated_at  DateTime @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+
+  @@map("uoms")
+}
+
+model Worker {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique
+  display_name String
+  role        String?
+  department  String?
+  shift       String?
+  status      String?
+  contact     String?
+  skills      String?
+  created_at  DateTime @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+  updated_at  DateTime @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+
+  assignments ProcessWorker[]
+
+  @@map("workers")
+}
+
+model ProcessWorker {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  process_id   String   @db.Uuid
+  worker_id    String   @db.Uuid
+  assignment_notes String?
+  created_at   DateTime @default(dbgenerated("timezone('utc', now())")) @db.Timestamptz(6)
+
+  process Process @relation(fields: [process_id], references: [id])
+  worker  Worker  @relation(fields: [worker_id], references: [id])
+
+  @@unique([process_id, worker_id], map: "process_workers_unique_assignment")
+  @@map("process_workers")
+}

@@ -1,7 +1,8 @@
+import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
+import { prisma } from "@/lib/prisma";
 import { uomCreateSchema } from "@/lib/validation";
 
 const normalizeStatus = (status: string | null) => {
@@ -13,34 +14,39 @@ const normalizeStatus = (status: string | null) => {
 };
 
 export async function GET(request: NextRequest) {
-  const supabase = getSupabaseServerClient();
   const { searchParams } = new URL(request.url);
   const status = normalizeStatus(searchParams.get("status"));
   const search = searchParams.get("search");
 
-  let query = supabase.from("uoms").select("*").order("code", { ascending: true });
+  const where: Prisma.UomWhereInput = {};
 
   if (status !== null) {
-    query = query.eq("is_active", status);
+    where.is_active = status;
   }
 
   if (search) {
     const value = search.trim();
     if (value.length > 0) {
-      query = query.or(`code.ilike.%${value}%,name.ilike.%${value}%`);
+      where.OR = [
+        { code: { contains: value, mode: "insensitive" } },
+        { name: { contains: value, mode: "insensitive" } },
+      ];
     }
   }
 
-  const { data, error } = await query;
+  try {
+    const uoms = await prisma.uom.findMany({
+      where,
+      orderBy: { code: "asc" },
+    });
 
-  if (error) {
+    return success(uoms);
+  } catch (error) {
     return failure("Unable to fetch units of measure", {
       status: 500,
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  return success(data ?? []);
 }
 
 export async function POST(request: NextRequest) {
@@ -55,29 +61,34 @@ export async function POST(request: NextRequest) {
   }
 
   const { code, name, type, precision, status, description } = parsed.data;
-  const payload = {
-    code,
-    name,
-    type: type ?? null,
-    precision: precision ?? null,
-    description: description ?? null,
-    is_active: status ? status === "Active" : true,
-  };
 
-  const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("uoms")
-    .insert(payload)
-    .select("*")
-    .single();
+  try {
+    const uom = await prisma.uom.create({
+      data: {
+        code,
+        name,
+        type: type ?? null,
+        precision: precision ?? null,
+        description: description ?? null,
+        is_active: status ? status === "Active" : true,
+      },
+    });
 
-  if (error) {
-    const statusCode = error.code === "23505" ? 409 : 500;
+    return success(uom, 201);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return failure("Unable to create unit of measure", {
+        status: 409,
+        details: error.message,
+      });
+    }
+
     return failure("Unable to create unit of measure", {
-      status: statusCode,
-      details: error.message,
+      status: 500,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  return success(data, 201);
 }

@@ -1,32 +1,30 @@
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
+import { prisma } from "@/lib/prisma";
 import { workerUpdateSchema } from "@/lib/validation";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("workers")
-    .select("*")
-    .eq("id", params.id)
-    .maybeSingle();
+  try {
+    const worker = await prisma.worker.findUnique({
+      where: { id: params.id },
+    });
 
-  if (error) {
+    if (!worker) {
+      return failure("Worker not found", { status: 404 });
+    }
+
+    return success(worker);
+  } catch (error) {
     return failure("Unable to fetch worker", {
       status: 500,
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  if (!data) {
-    return failure("Worker not found", { status: 404 });
-  }
-
-  return success(data);
 }
 
 export async function PATCH(
@@ -43,59 +41,75 @@ export async function PATCH(
     });
   }
 
-  const updates: Record<string, unknown> = {};
-  const { code, name, role, department, shift, status, contact, skills } = parsed.data;
+  const { code, name, role, department, shift, status, contact, skills } =
+    parsed.data;
 
-  if (code !== undefined) updates.code = code;
-  if (name !== undefined) updates.display_name = name;
-  if (role !== undefined) updates.role = role ?? null;
-  if (department !== undefined) updates.department = department ?? null;
-  if (shift !== undefined) updates.shift = shift ?? null;
-  if (status !== undefined) updates.status = status ?? null;
-  if (contact !== undefined) updates.contact = contact ?? null;
-  if (skills !== undefined) updates.skills = skills ?? null;
+  const data: Record<string, unknown> = {};
 
-  if (Object.keys(updates).length === 0) {
+  if (code !== undefined) data.code = code;
+  if (name !== undefined) data.display_name = name;
+  if (role !== undefined) data.role = role ?? null;
+  if (department !== undefined) data.department = department ?? null;
+  if (shift !== undefined) data.shift = shift ?? null;
+  if (status !== undefined) data.status = status ?? null;
+  if (contact !== undefined) data.contact = contact ?? null;
+  if (skills !== undefined) data.skills = skills ?? null;
+
+  if (Object.keys(data).length === 0) {
     return failure("Nothing to update", { status: 400 });
   }
 
-  const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("workers")
-    .update(updates)
-    .eq("id", params.id)
-    .select("*")
-    .maybeSingle();
+  try {
+    const worker = await prisma.worker.update({
+      where: { id: params.id },
+      data,
+    });
 
-  if (error) {
-    const statusCode = error.code === "23505" ? 409 : 500;
+    return success(worker);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return failure("Unable to update worker", {
+        status: 409,
+        details: error.message,
+      });
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return failure("Worker not found", { status: 404 });
+    }
+
     return failure("Unable to update worker", {
-      status: statusCode,
-      details: error.message,
+      status: 500,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  if (!data) {
-    return failure("Worker not found", { status: 404 });
-  }
-
-  return success(data);
 }
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const supabase = getSupabaseServerClient();
-  const { error } = await supabase
-    .from("workers")
-    .delete()
-    .eq("id", params.id);
+  try {
+    await prisma.worker.delete({
+      where: { id: params.id },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return failure("Worker not found", { status: 404 });
+    }
 
-  if (error) {
     return failure("Unable to delete worker", {
       status: 500,
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
 

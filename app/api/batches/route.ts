@@ -1,8 +1,9 @@
+import { Prisma, batch_status } from "@prisma/client";
 import { NextRequest } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
-import { BATCH_SELECT } from "@/lib/selects";
+import { BATCH_INCLUDE } from "@/lib/selects";
+import { prisma } from "@/lib/prisma";
 import { batchCreateSchema, batchStatusValues } from "@/lib/validation";
 
 const parseStatusFilter = (value: string) => {
@@ -16,39 +17,39 @@ const parseStatusFilter = (value: string) => {
 };
 
 export async function GET(request: NextRequest) {
-  const supabase = getSupabaseServerClient();
   const { searchParams } = new URL(request.url);
   const processId = searchParams.get("processId");
   const statusParam = searchParams.get("status");
 
-  let query = supabase
-    .from("batches")
-    .select(BATCH_SELECT)
-    .order("created_at", { ascending: false });
+  const where: Prisma.BatchWhereInput = {};
 
   if (processId) {
-    query = query.eq("process_id", processId);
+    where.process_id = processId;
   }
 
   if (statusParam) {
     const statuses = parseStatusFilter(statusParam);
     if (statuses.length === 1) {
-      query = query.eq("status", statuses[0]);
+      where.status = statuses[0] as batch_status;
     } else if (statuses.length > 1) {
-      query = query.in("status", statuses);
+      where.status = { in: statuses as batch_status[] };
     }
   }
 
-  const { data, error } = await query;
+  try {
+    const batches = await prisma.batch.findMany({
+      where,
+      orderBy: { created_at: "desc" },
+      include: BATCH_INCLUDE,
+    });
 
-  if (error) {
+    return success(batches);
+  } catch (error) {
     return failure("Unable to fetch batches", {
       status: 500,
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  return success(data ?? []);
 }
 
 export async function POST(request: NextRequest) {
@@ -62,7 +63,6 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const supabase = getSupabaseServerClient();
   const {
     code,
     processId,
@@ -79,35 +79,41 @@ export async function POST(request: NextRequest) {
     notes,
   } = parsed.data;
 
-  const payload = {
-    code,
-    process_id: processId,
-    bom_template_id: bomTemplateId ?? null,
-    status: status ?? "scheduled",
-    planned_quantity: plannedQuantity ?? null,
-    input_quantity: inputQuantity ?? null,
-    output_quantity: outputQuantity ?? null,
-    wastage_percentage: wastagePercentage ?? null,
-    started_at: startedAt ?? null,
-    completed_at: completedAt ?? null,
-    supervisor_id: supervisorId ?? null,
-    created_by: createdBy ?? null,
-    notes: notes ?? null,
-  };
+  try {
+    const batch = await prisma.batch.create({
+      data: {
+        code,
+        process_id: processId,
+        bom_template_id: bomTemplateId ?? null,
+        status: (status ?? "scheduled") as batch_status,
+        planned_quantity: plannedQuantity ?? null,
+        input_quantity: inputQuantity ?? null,
+        output_quantity: outputQuantity ?? null,
+        wastage_percentage: wastagePercentage ?? null,
+        started_at: startedAt ?? null,
+        completed_at: completedAt ?? null,
+        supervisor_id: supervisorId ?? null,
+        created_by: createdBy ?? null,
+        notes: notes ?? null,
+      },
+      include: BATCH_INCLUDE,
+    });
 
-  const { data, error } = await supabase
-    .from("batches")
-    .insert(payload)
-    .select(BATCH_SELECT)
-    .single();
+    return success(batch, 201);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return failure("Unable to create batch", {
+        status: 409,
+        details: error.message,
+      });
+    }
 
-  if (error) {
-    const statusCode = error.code === "23505" ? 409 : 500;
     return failure("Unable to create batch", {
-      status: statusCode,
-      details: error.message,
+      status: 500,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  return success(data, 201);
 }

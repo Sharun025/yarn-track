@@ -1,32 +1,30 @@
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
+import { prisma } from "@/lib/prisma";
 import { processUpdateSchema } from "@/lib/validation";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("processes")
-    .select("*")
-    .eq("id", params.id)
-    .maybeSingle();
+  try {
+    const process = await prisma.process.findUnique({
+      where: { id: params.id },
+    });
 
-  if (error) {
+    if (!process) {
+      return failure("Process not found", { status: 404 });
+    }
+
+    return success(process);
+  } catch (error) {
     return failure("Unable to fetch process", {
       status: 500,
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  if (!data) {
-    return failure("Process not found", { status: 404 });
-  }
-
-  return success(data);
 }
 
 export async function PATCH(
@@ -43,56 +41,71 @@ export async function PATCH(
     });
   }
 
-  const updates: Record<string, unknown> = {};
   const { slug, name, description, sequence, isActive } = parsed.data;
 
-  if (slug !== undefined) updates.slug = slug;
-  if (name !== undefined) updates.name = name;
-  if (description !== undefined) updates.description = description ?? null;
-  if (sequence !== undefined) updates.sequence = sequence ?? null;
-  if (isActive !== undefined) updates.is_active = isActive;
+  const data: Record<string, unknown> = {};
 
-  if (Object.keys(updates).length === 0) {
+  if (slug !== undefined) data.slug = slug;
+  if (name !== undefined) data.name = name;
+  if (description !== undefined) data.description = description ?? null;
+  if (sequence !== undefined) data.sequence = sequence ?? null;
+  if (isActive !== undefined) data.is_active = isActive;
+
+  if (Object.keys(data).length === 0) {
     return failure("Nothing to update", { status: 400 });
   }
 
-  const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("processes")
-    .update(updates)
-    .eq("id", params.id)
-    .select("*")
-    .maybeSingle();
+  try {
+    const process = await prisma.process.update({
+      where: { id: params.id },
+      data,
+    });
 
-  if (error) {
-    const status = error.code === "23505" ? 409 : 500;
+    return success(process);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return failure("Unable to update process", {
+        status: 409,
+        details: error.message,
+      });
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return failure("Process not found", { status: 404 });
+    }
+
     return failure("Unable to update process", {
-      status,
-      details: error.message,
+      status: 500,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  if (!data) {
-    return failure("Process not found", { status: 404 });
-  }
-
-  return success(data);
 }
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const supabase = getSupabaseServerClient();
-  const { error } = await supabase
-    .from("processes")
-    .delete()
-    .eq("id", params.id);
+  try {
+    await prisma.process.delete({
+      where: { id: params.id },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return failure("Process not found", { status: 404 });
+    }
 
-  if (error) {
     return failure("Unable to delete process", {
       status: 500,
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
 
