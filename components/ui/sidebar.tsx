@@ -46,7 +46,7 @@ export function SidebarProvider({
 }
 
 const baseSidebarClasses =
-  "group/sidebar relative hidden border-r bg-card text-card-foreground transition-all duration-200 ease-in-out lg:flex";
+  "group/sidebar relative flex border-r bg-card text-card-foreground transition-all duration-200 ease-in-out";
 
 export const Sidebar = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, children, ...props }, ref) => {
@@ -56,7 +56,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
       <aside
         ref={ref}
         data-collapsed={collapsed}
-        className={cn(baseSidebarClasses, "w-[280px]", collapsed && "w-[80px]", className)}
+        className={cn(baseSidebarClasses, collapsed ? "w-[80px]" : "w-[280px]", className)}
         {...props}
       >
         <div className="flex h-full w-full flex-col overflow-hidden pb-6" data-collapsed={collapsed}>
