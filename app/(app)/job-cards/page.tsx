@@ -775,14 +775,16 @@ export default function JobCardsPage() {
                           requirements.map((requirement, index) => (
                             <Badge key={`${requirement}-${index}`} variant="outline" className="gap-1">
                               <span>{requirement}</span>
-                              <button
+                              <Button
                                 type="button"
-                                className="text-muted-foreground hover:text-destructive"
+                                variant="ghost"
+                                size="icon"
+                                className="h-4 w-4 rounded-full p-0 text-xs text-muted-foreground hover:text-destructive"
                                 onClick={() => removeRequirement(index)}
                                 aria-label="Remove requirement"
                               >
                                 ×
-                              </button>
+                              </Button>
                             </Badge>
                           ))
                         )}

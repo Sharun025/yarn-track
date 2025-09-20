@@ -354,7 +354,15 @@ export default function TransactionsPage() {
             )}
             {movementError && !movementLoading && (
               <div className="rounded-lg border border-dashed bg-rose-100 px-4 py-3 text-sm text-rose-700">
-                Failed to load movements. <button className="font-semibold underline" onClick={() => void refreshMovements()}>Retry</button>
+                Failed to load movements.
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="ml-1 h-auto p-0 font-semibold"
+                  onClick={() => void refreshMovements()}
+                >
+                  Retry
+                </Button>
               </div>
             )}
             {!movementLoading && !movementError && movementLog.length === 0 && (
