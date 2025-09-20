@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useApi } from "@/lib/hooks/useApi";
 
 type ItemRecord = {
@@ -148,47 +149,51 @@ export default function StockAuditPage() {
           <CardDescription>Review the captured lines before requesting approval.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Item</TableHead>
-                <TableHead className="text-center">System qty</TableHead>
-                <TableHead className="text-center">Physical qty</TableHead>
-                <TableHead>Difference</TableHead>
-                <TableHead>Location</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {mockSnapshots.map((line) => {
-                const masterRecord = items.find((record) => record.sku === line.code);
-                const diff = line.physical - line.system;
-                return (
-                  <TableRow key={line.code}>
-                    <TableCell className="font-medium">
-                      <div className="space-y-1">
-                        <p>{line.code}</p>
-                        {masterRecord ? (
-                          <>
-                            <p className="text-xs text-muted-foreground">{masterRecord.name}</p>
-                            <p className="text-xs text-muted-foreground">UOM: {masterRecord.unit}</p>
-                          </>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">Unmapped in master</p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">{line.system}</TableCell>
-                    <TableCell className="text-center">{line.physical}</TableCell>
-                    <TableCell className={diff === 0 ? "text-sm" : diff > 0 ? "text-sm text-emerald-600" : "text-sm text-rose-600"}>
-                      {diff > 0 ? "+" : ""}
-                      {diff}
-                    </TableCell>
-                    <TableCell>{line.location}</TableCell>
+          <ScrollArea>
+            <div className="min-w-[720px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item</TableHead>
+                    <TableHead className="text-center">System qty</TableHead>
+                    <TableHead className="text-center">Physical qty</TableHead>
+                    <TableHead>Difference</TableHead>
+                    <TableHead>Location</TableHead>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                </TableHeader>
+                <TableBody>
+                  {mockSnapshots.map((line) => {
+                    const masterRecord = items.find((record) => record.sku === line.code);
+                    const diff = line.physical - line.system;
+                    return (
+                      <TableRow key={line.code}>
+                        <TableCell className="font-medium">
+                          <div className="space-y-1">
+                            <p>{line.code}</p>
+                            {masterRecord ? (
+                              <>
+                                <p className="text-xs text-muted-foreground">{masterRecord.name}</p>
+                                <p className="text-xs text-muted-foreground">UOM: {masterRecord.unit}</p>
+                              </>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">Unmapped in master</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">{line.system}</TableCell>
+                        <TableCell className="text-center">{line.physical}</TableCell>
+                        <TableCell className={diff === 0 ? "text-sm" : diff > 0 ? "text-sm text-emerald-600" : "text-sm text-rose-600"}>
+                          {diff > 0 ? "+" : ""}
+                          {diff}
+                        </TableCell>
+                        <TableCell>{line.location}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </ScrollArea>
         </CardContent>
         <CardFooter className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
           <Button variant="outline">Export draft</Button>

@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sheet,
   SheetContent,
@@ -576,37 +577,41 @@ export default function JobCardsPage() {
                     {completedCards.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No cards have been marked completed yet.</p>
                     ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-[140px]">Job card</TableHead>
-                            <TableHead>Output item</TableHead>
-                            <TableHead>Qty</TableHead>
-                            <TableHead>Completed on</TableHead>
-                            <TableHead>Last notes</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {completedCards.map((card) => {
-                            const completionTransaction = card.transactions?.find(
-                              (txn) => txn.type === "status" && txn.toStatus === "Completed"
-                            );
-                            return (
-                              <TableRow key={`completed-${filter}-${card.id}`}>
-                                <TableCell className="font-medium">{card.id}</TableCell>
-                                <TableCell>{card.outputItem}</TableCell>
-                                <TableCell>{card.quantity}</TableCell>
-                                <TableCell>
-                                  {completionTransaction ? formatDateTime(completionTransaction.timestamp) : "—"}
-                                </TableCell>
-                                <TableCell className="max-w-[220px] truncate">
-                                  {completionTransaction?.notes || "—"}
-                                </TableCell>
+                      <ScrollArea>
+                        <div className="min-w-[720px]">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="w-[140px]">Job card</TableHead>
+                                <TableHead>Output item</TableHead>
+                                <TableHead>Qty</TableHead>
+                                <TableHead>Completed on</TableHead>
+                                <TableHead>Last notes</TableHead>
                               </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
+                            </TableHeader>
+                            <TableBody>
+                              {completedCards.map((card) => {
+                                const completionTransaction = card.transactions?.find(
+                                  (txn) => txn.type === "status" && txn.toStatus === "Completed"
+                                );
+                                return (
+                                  <TableRow key={`completed-${filter}-${card.id}`}>
+                                    <TableCell className="font-medium">{card.id}</TableCell>
+                                    <TableCell>{card.outputItem}</TableCell>
+                                    <TableCell>{card.quantity}</TableCell>
+                                    <TableCell>
+                                      {completionTransaction ? formatDateTime(completionTransaction.timestamp) : "—"}
+                                    </TableCell>
+                                    <TableCell className="max-w-[220px] truncate">
+                                      {completionTransaction?.notes || "—"}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </ScrollArea>
                     )}
                   </CardContent>
                 </Card>
@@ -828,40 +833,44 @@ export default function JobCardsPage() {
                   </Button>
                 </div>
                 {activeCard && activeCard.transactions?.length ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[160px]">Timestamp</TableHead>
-                        <TableHead>Activity</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Process</TableHead>
-                        <TableHead>Weight in</TableHead>
-                        <TableHead>Weight out</TableHead>
-                        <TableHead>Notes</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {activeCard.transactions.map((txn, index) => (
-                        <TableRow key={`${activeCard.id}-txn-${index}`}>
-                          <TableCell>{formatDateTime(txn.timestamp)}</TableCell>
-                          <TableCell>{transactionTypeLabels[txn.type]}</TableCell>
-                          <TableCell>
-                            {txn.fromStatus === txn.toStatus
-                              ? txn.toStatus
-                              : `${txn.fromStatus} → ${txn.toStatus}`}
-                          </TableCell>
-                          <TableCell>
-                            {txn.fromProcess === txn.toProcess
-                              ? txn.toProcess
-                              : `${txn.fromProcess} → ${txn.toProcess}`}
-                          </TableCell>
-                          <TableCell>{txn.weightIn ?? "—"}</TableCell>
-                          <TableCell>{txn.weightOut ?? "—"}</TableCell>
-                          <TableCell className="max-w-[200px] whitespace-normal">{txn.notes ?? "—"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <ScrollArea>
+                    <div className="min-w-[760px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[160px]">Timestamp</TableHead>
+                            <TableHead>Activity</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Process</TableHead>
+                            <TableHead>Weight in</TableHead>
+                            <TableHead>Weight out</TableHead>
+                            <TableHead>Notes</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {activeCard.transactions.map((txn, index) => (
+                            <TableRow key={`${activeCard.id}-txn-${index}`}>
+                              <TableCell>{formatDateTime(txn.timestamp)}</TableCell>
+                              <TableCell>{transactionTypeLabels[txn.type]}</TableCell>
+                              <TableCell>
+                                {txn.fromStatus === txn.toStatus
+                                  ? txn.toStatus
+                                  : `${txn.fromStatus} → ${txn.toStatus}`}
+                              </TableCell>
+                              <TableCell>
+                                {txn.fromProcess === txn.toProcess
+                                  ? txn.toProcess
+                                  : `${txn.fromProcess} → ${txn.toProcess}`}
+                              </TableCell>
+                              <TableCell>{txn.weightIn ?? "—"}</TableCell>
+                              <TableCell>{txn.weightOut ?? "—"}</TableCell>
+                              <TableCell className="max-w-[200px] whitespace-normal">{txn.notes ?? "—"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </ScrollArea>
                 ) : (
                   <p className="text-sm text-muted-foreground">No transactions captured yet. Log the first one to start the audit trail.</p>
                 )}

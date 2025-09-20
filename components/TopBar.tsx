@@ -18,8 +18,8 @@ export function TopBar() {
   const { collapsed, setCollapsed } = useSidebar();
 
   return (
-    <header className="flex items-center justify-between border-b bg-card px-4 py-3 lg:px-8">
-      <div className="flex items-center gap-3">
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-card px-4 py-3 lg:px-8">
+      <div className="flex min-w-0 items-center gap-3">
         <Sheet onOpenChange={(open) => open && setCollapsed(false)}>
           <SheetTrigger asChild>
             <Button
@@ -43,7 +43,7 @@ export function TopBar() {
           {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </SidebarTrigger>
 
-        <div className="space-y-0.5">
+        <div className="min-w-0 space-y-0.5">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Operations command center
           </p>
@@ -53,14 +53,24 @@ export function TopBar() {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
         <Button variant="outline" size="sm" className="hidden md:flex">
           View shift plan
         </Button>
         <Button size="sm" className="hidden md:flex">
           Log production
         </Button>
-        <div className="flex items-center gap-3 rounded-full border bg-card px-3 py-1.5">
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 rounded-full border border-dashed sm:hidden"
+          aria-label="View profile"
+        >
+          <Avatar className="h-7 w-7">
+            <AvatarFallback>SS</AvatarFallback>
+          </Avatar>
+        </Button>
+        <div className="hidden items-center gap-3 rounded-full border bg-card px-3 py-1.5 sm:flex">
           <Avatar className="h-9 w-9">
             <AvatarFallback>SS</AvatarFallback>
           </Avatar>

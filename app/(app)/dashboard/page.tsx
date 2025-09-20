@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useApi } from "@/lib/hooks/useApi";
 
@@ -359,64 +360,68 @@ export default function DashboardPage() {
         </div>
         <Card>
           <CardContent className="px-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Process</TableHead>
-                  <TableHead>Active batches</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Efficiency</TableHead>
-                  <TableHead>Next action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loadingProcesses && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                      Loading process data…
-                    </TableCell>
-                  </TableRow>
-                )}
+            <ScrollArea>
+              <div className="min-w-[680px] px-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Process</TableHead>
+                      <TableHead>Active batches</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Efficiency</TableHead>
+                      <TableHead>Next action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loadingProcesses && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                          Loading process data…
+                        </TableCell>
+                      </TableRow>
+                    )}
 
-                {!loadingProcesses && (processError || batchError) && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-sm text-rose-600">
-                      Unable to load process overview. Please retry shortly.
-                    </TableCell>
-                  </TableRow>
-                )}
+                    {!loadingProcesses && (processError || batchError) && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-sm text-rose-600">
+                          Unable to load process overview. Please retry shortly.
+                        </TableCell>
+                      </TableRow>
+                    )}
 
-                {!loadingProcesses && !processError && !batchError && processRows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                      No processes configured yet.
-                    </TableCell>
-                  </TableRow>
-                )}
+                    {!loadingProcesses && !processError && !batchError && processRows.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                          No processes configured yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
 
-                {processRows.map((row) => (
-                  <TableRow key={row.process}>
-                    <TableCell className="font-medium">{row.process}</TableCell>
-                    <TableCell>{row.batches}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          "text-xs font-semibold",
-                          statusStyles[row.status] ?? "bg-slate-100 text-slate-700"
-                        )}
-                      >
-                        {row.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{row.efficiency}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {row.nextAction}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    {processRows.map((row) => (
+                      <TableRow key={row.process}>
+                        <TableCell className="font-medium">{row.process}</TableCell>
+                        <TableCell>{row.batches}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              "text-xs font-semibold",
+                              statusStyles[row.status] ?? "bg-slate-100 text-slate-700"
+                            )}
+                          >
+                            {row.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{row.efficiency}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {row.nextAction}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </ScrollArea>
           </CardContent>
         </Card>
       </section>
