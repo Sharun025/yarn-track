@@ -86,6 +86,55 @@ export const workerUpdateSchema = workerCreateSchema.partial().refine(
   }
 );
 
+export const simpleMasterCreateSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const simpleMasterUpdateSchema = simpleMasterCreateSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  {
+    message: "Provide at least one field to update",
+  }
+);
+
+export const vendorCreateSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  contactInfo: z.string().optional(),
+  description: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const vendorUpdateSchema = vendorCreateSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  {
+    message: "Provide at least one field to update",
+  }
+);
+
+const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export const workerShiftCreateSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional(),
+  startTime: z.string().regex(timePattern, "Use HH:MM format").optional(),
+  endTime: z.string().regex(timePattern, "Use HH:MM format").optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const workerShiftUpdateSchema = z
+  .object({
+    name: z.string().min(1, "Name is required").optional(),
+    description: z.string().nullable().optional(),
+    startTime: z.union([z.string().regex(timePattern, "Use HH:MM format"), z.null()]).optional(),
+    endTime: z.union([z.string().regex(timePattern, "Use HH:MM format"), z.null()]).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "Provide at least one field to update",
+  });
+
 const bomComponentSchema = z.object({
   itemId: z.string().uuid(),
   expectedQuantity: z.number().positive(),
@@ -180,3 +229,9 @@ export type BatchMovementCreateInput = z.infer<
 >;
 export type BomUsageCreateInput = z.infer<typeof bomUsageCreateSchema>;
 export type BomUsageUpdateInput = z.infer<typeof bomUsageUpdateSchema>;
+export type SimpleMasterCreateInput = z.infer<typeof simpleMasterCreateSchema>;
+export type SimpleMasterUpdateInput = z.infer<typeof simpleMasterUpdateSchema>;
+export type VendorCreateInput = z.infer<typeof vendorCreateSchema>;
+export type VendorUpdateInput = z.infer<typeof vendorUpdateSchema>;
+export type WorkerShiftCreateInput = z.infer<typeof workerShiftCreateSchema>;
+export type WorkerShiftUpdateInput = z.infer<typeof workerShiftUpdateSchema>;

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { MoreHorizontal, Plus, X } from "lucide-react";
 
@@ -67,9 +67,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useApi } from "@/lib/hooks/useApi";
 
 const itemStatusOptions = ["Active", "Reorder", "Watch", "Inactive"] as const;
-const itemCategoryOptions = ["Raw material", "Chemicals", "Packing", "Consumable"];
 const uomTypeOptions = ["Weight", "Length", "Count", "Volume", "Area"];
 const workerStatusOptions = ["Active", "On leave", "Inactive"] as const;
+
+const simpleMasterStatusOptions = ["Active", "Inactive"] as const;
 
 const statusBadge: Record<string, string> = {
   Active: "border-transparent bg-emerald-100 text-emerald-700",
@@ -81,6 +82,11 @@ const statusBadge: Record<string, string> = {
 
 const jsonHeaders = {
   "Content-Type": "application/json",
+};
+
+const formatTime = (value: string | null) => {
+  if (!value) return null;
+  return value.slice(0, 5);
 };
 
 async function request<T>(url: string, init: RequestInit) {
@@ -204,12 +210,47 @@ type BomTemplateRecord = {
   components: BomComponentRecord[];
 };
 
+type SimpleMasterRecord = {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type VendorRecord = {
+  id: string;
+  name: string;
+  description: string | null;
+  contact_info: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type WorkerShiftRecord = {
+  id: string;
+  name: string;
+  description: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 type MastersContextValue = {
   items: ApiState<ItemRecord>;
   uoms: ApiState<UomRecord>;
   workers: ApiState<WorkerRecord>;
   processes: ApiState<ProcessRecord>;
   bomTemplates: ApiState<BomTemplateRecord>;
+  itemCategories: ApiState<SimpleMasterRecord>;
+  vendors: ApiState<VendorRecord>;
+  departments: ApiState<SimpleMasterRecord>;
+  workerRoles: ApiState<SimpleMasterRecord>;
+  workerShifts: ApiState<WorkerShiftRecord>;
 };
 
 const MastersDataContext = createContext<MastersContextValue | null>(null);
@@ -222,7 +263,17 @@ const useMastersData = () => {
   return context;
 };
 
-type FormEntity = "item" | "uom" | "worker" | "process" | "bom";
+type FormEntity =
+  | "item"
+  | "uom"
+  | "worker"
+  | "process"
+  | "bom"
+  | "itemCategory"
+  | "vendor"
+  | "department"
+  | "workerRole"
+  | "workerShift";
 type FormMode = "create" | "edit";
 
 type DialogState = {
@@ -244,6 +295,11 @@ export default function MastersPage() {
   const workersState = useApi<WorkerRecord[]>("/api/workers");
   const processesState = useApi<ProcessRecord[]>("/api/processes");
   const bomTemplatesState = useApi<BomTemplateRecord[]>("/api/bom/templates");
+  const itemCategoriesState = useApi<SimpleMasterRecord[]>("/api/item-categories");
+  const vendorsState = useApi<VendorRecord[]>("/api/vendors");
+  const departmentsState = useApi<SimpleMasterRecord[]>("/api/departments");
+  const workerRolesState = useApi<SimpleMasterRecord[]>("/api/worker-roles");
+  const workerShiftsState = useApi<WorkerShiftRecord[]>("/api/worker-shifts");
 
   const contextValue = useMemo<MastersContextValue>(
     () => ({
@@ -277,6 +333,36 @@ export default function MastersPage() {
         error: bomTemplatesState.error,
         refresh: bomTemplatesState.refresh,
       },
+      itemCategories: {
+        records: itemCategoriesState.data ?? [],
+        isLoading: itemCategoriesState.isLoading,
+        error: itemCategoriesState.error,
+        refresh: itemCategoriesState.refresh,
+      },
+      vendors: {
+        records: vendorsState.data ?? [],
+        isLoading: vendorsState.isLoading,
+        error: vendorsState.error,
+        refresh: vendorsState.refresh,
+      },
+      departments: {
+        records: departmentsState.data ?? [],
+        isLoading: departmentsState.isLoading,
+        error: departmentsState.error,
+        refresh: departmentsState.refresh,
+      },
+      workerRoles: {
+        records: workerRolesState.data ?? [],
+        isLoading: workerRolesState.isLoading,
+        error: workerRolesState.error,
+        refresh: workerRolesState.refresh,
+      },
+      workerShifts: {
+        records: workerShiftsState.data ?? [],
+        isLoading: workerShiftsState.isLoading,
+        error: workerShiftsState.error,
+        refresh: workerShiftsState.refresh,
+      },
     }),
     [
       itemsState.data,
@@ -299,6 +385,26 @@ export default function MastersPage() {
       bomTemplatesState.error,
       bomTemplatesState.isLoading,
       bomTemplatesState.refresh,
+      itemCategoriesState.data,
+      itemCategoriesState.error,
+      itemCategoriesState.isLoading,
+      itemCategoriesState.refresh,
+      vendorsState.data,
+      vendorsState.error,
+      vendorsState.isLoading,
+      vendorsState.refresh,
+      departmentsState.data,
+      departmentsState.error,
+      departmentsState.isLoading,
+      departmentsState.refresh,
+      workerRolesState.data,
+      workerRolesState.error,
+      workerRolesState.isLoading,
+      workerRolesState.refresh,
+      workerShiftsState.data,
+      workerShiftsState.error,
+      workerShiftsState.isLoading,
+      workerShiftsState.refresh,
     ]
   );
 
@@ -307,16 +413,22 @@ export default function MastersPage() {
     const processes = contextValue.processes.records;
     const workers = contextValue.workers.records;
     const bomTemplates = contextValue.bomTemplates.records;
+    const categories = contextValue.itemCategories.records;
+    const vendors = contextValue.vendors.records;
 
     const activeItems = items.filter((item) => (item.status ?? "").toLowerCase() === "active").length;
     const activeProcesses = processes.filter((process) => process.is_active).length;
     const activeWorkers = workers.filter((worker) => (worker.status ?? "").toLowerCase() === "active").length;
+    const activeCategories = categories.filter((category) => category.is_active).length;
+    const activeVendors = vendors.filter((vendor) => vendor.is_active).length;
 
     return [
       { title: "Total SKUs", value: items.length, meta: `${activeItems} active` },
       { title: "Processes", value: processes.length, meta: `${activeProcesses} available` },
       { title: "Workers", value: workers.length, meta: `${activeWorkers} active` },
       { title: "BOM templates", value: bomTemplates.length, meta: "Configured outputs" },
+      { title: "Categories", value: categories.length, meta: `${activeCategories} active` },
+      { title: "Vendors", value: vendors.length, meta: `${activeVendors} active` },
     ];
   }, [contextValue]);
 
@@ -356,6 +468,11 @@ export default function MastersPage() {
       if (entity === "worker") await contextValue.workers.refresh();
       if (entity === "process") await contextValue.processes.refresh();
       if (entity === "bom") await contextValue.bomTemplates.refresh();
+      if (entity === "itemCategory") await contextValue.itemCategories.refresh();
+      if (entity === "vendor") await contextValue.vendors.refresh();
+      if (entity === "department") await contextValue.departments.refresh();
+      if (entity === "workerRole") await contextValue.workerRoles.refresh();
+      if (entity === "workerShift") await contextValue.workerShifts.refresh();
     },
     [contextValue]
   );
@@ -380,6 +497,21 @@ export default function MastersPage() {
       } else if (entity === "bom") {
         const { id } = record as BomTemplateRecord;
         await request(`/api/bom/templates/${id}`, { method: "DELETE" });
+      } else if (entity === "itemCategory") {
+        const { id } = record as SimpleMasterRecord;
+        await request(`/api/item-categories/${id}`, { method: "DELETE" });
+      } else if (entity === "vendor") {
+        const { id } = record as VendorRecord;
+        await request(`/api/vendors/${id}`, { method: "DELETE" });
+      } else if (entity === "department") {
+        const { id } = record as SimpleMasterRecord;
+        await request(`/api/departments/${id}`, { method: "DELETE" });
+      } else if (entity === "workerRole") {
+        const { id } = record as SimpleMasterRecord;
+        await request(`/api/worker-roles/${id}`, { method: "DELETE" });
+      } else if (entity === "workerShift") {
+        const { id } = record as WorkerShiftRecord;
+        await request(`/api/worker-shifts/${id}`, { method: "DELETE" });
       }
       await refreshEntity(entity);
     } catch (error) {
@@ -416,13 +548,14 @@ export default function MastersPage() {
         </Card>
 
         <Tabs defaultValue="items" className="space-y-6">
-          <TabsList className="h-auto w-full justify-start gap-2 overflow-x-auto rounded-xl bg-muted p-1">
-            <TabsTrigger value="items">Item Master</TabsTrigger>
-            <TabsTrigger value="uom">UOM Master</TabsTrigger>
-            <TabsTrigger value="workers">Worker Master</TabsTrigger>
-            <TabsTrigger value="processes">Process Master</TabsTrigger>
-            <TabsTrigger value="bom">BOM Master</TabsTrigger>
-          </TabsList>
+        <TabsList className="h-auto w-full justify-start gap-2 overflow-x-auto rounded-xl bg-muted p-1">
+          <TabsTrigger value="items">Item Master</TabsTrigger>
+          <TabsTrigger value="uom">UOM Master</TabsTrigger>
+          <TabsTrigger value="workers">Worker Master</TabsTrigger>
+          <TabsTrigger value="processes">Process Master</TabsTrigger>
+          <TabsTrigger value="bom">BOM Master</TabsTrigger>
+          <TabsTrigger value="reference">Reference Masters</TabsTrigger>
+        </TabsList>
 
           <TabsContent value="items">
             <ItemsSection onCreate={() => openDialog("item", "create")} onEdit={(record) => openDialog("item", "edit", record)} onDelete={(record) => openDelete("item", record)} />
@@ -447,6 +580,14 @@ export default function MastersPage() {
               onDelete={(record) => openDelete("bom", record)}
             />
           </TabsContent>
+
+          <TabsContent value="reference">
+            <ReferenceMastersSection
+              onCreate={(entity) => openDialog(entity, "create")}
+              onEdit={(entity, record) => openDialog(entity, "edit", record)}
+              onDelete={(entity, record) => openDelete(entity, record)}
+            />
+          </TabsContent>
         </Tabs>
 
         <MasterFormDialog state={dialogState} onClose={closeDialog} onSuccess={async (entity) => {
@@ -466,13 +607,231 @@ type SectionProps<T> = {
   onDelete: (record: T) => void;
 };
 
+type SimpleMasterColumn<T> = {
+  header: string;
+  className?: string;
+  render: (record: T) => ReactNode;
+};
+
+type SimpleMasterCardProps<T extends { id: string }> = {
+  title: string;
+  description: string;
+  emptyMessage: string;
+  entity: FormEntity;
+  state: ApiState<T>;
+  columns: SimpleMasterColumn<T>[];
+  onCreate: (entity: FormEntity) => void;
+  onEdit: (entity: FormEntity, record: T) => void;
+  onDelete: (entity: FormEntity, record: T) => void;
+};
+
+const SimpleMasterCard = <T extends { id: string }>({
+  title,
+  description,
+  emptyMessage,
+  entity,
+  state,
+  columns,
+  onCreate,
+  onEdit,
+  onDelete,
+}: SimpleMasterCardProps<T>) => {
+  return (
+    <Card>
+      <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-1">
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </div>
+        <Button size="sm" onClick={() => onCreate(entity)}>
+          <Plus className="mr-2 h-4 w-4" /> Add
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {columns.map((column) => (
+                <TableHead key={column.header} className={column.className}>
+                  {column.header}
+                </TableHead>
+              ))}
+              <TableHead className="w-[80px] text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {state.isLoading ? (
+              <TableRow>
+                <TableCell colSpan={columns.length + 1} className="text-center text-sm text-muted-foreground">
+                  Loading…
+                </TableCell>
+              </TableRow>
+            ) : state.error ? (
+              <TableRow>
+                <TableCell colSpan={columns.length + 1} className="text-center text-sm text-rose-600">
+                  {state.error.message}
+                </TableCell>
+              </TableRow>
+            ) : state.records.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={columns.length + 1} className="text-center text-sm text-muted-foreground">
+                  {emptyMessage}
+                </TableCell>
+              </TableRow>
+            ) : (
+              state.records.map((record) => (
+                <TableRow key={record.id}>
+                  {columns.map((column) => (
+                    <TableCell key={column.header} className={column.className}>
+                      {column.render(record)}
+                    </TableCell>
+                  ))}
+                  <TableCell className="text-right">
+                    <RowActions
+                      onEdit={() => onEdit(entity, record)}
+                      onDelete={() => onDelete(entity, record)}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+};
+
+type ReferenceMastersSectionProps = {
+  onCreate: (entity: FormEntity) => void;
+  onEdit: (entity: FormEntity, record: unknown) => void;
+  onDelete: (entity: FormEntity, record: unknown) => void;
+};
+
+const ReferenceMastersSection = ({ onCreate, onEdit, onDelete }: ReferenceMastersSectionProps) => {
+  const { itemCategories, vendors, departments, workerRoles, workerShifts } = useMastersData();
+
+  const basicBadge = (isActive: boolean) => (
+    <Badge variant="secondary" className={isActive ? statusBadge.Active : statusBadge.Inactive}>
+      {isActive ? "Active" : "Inactive"}
+    </Badge>
+  );
+
+  const categoryColumns: SimpleMasterColumn<SimpleMasterRecord>[] = [
+    { header: "Name", render: (record) => record.name },
+    { header: "Status", className: "w-[120px]", render: (record) => basicBadge(record.is_active) },
+    { header: "Description", className: "max-w-[260px]", render: (record) => record.description ?? "—" },
+  ];
+  const vendorColumns: SimpleMasterColumn<VendorRecord>[] = [
+    { header: "Name", render: (record) => record.name },
+    { header: "Status", className: "w-[120px]", render: (record) => basicBadge(record.is_active) },
+    { header: "Contact", className: "w-[160px]", render: (record) => record.contact_info ?? "—" },
+    { header: "Notes", className: "max-w-[220px]", render: (record) => record.description ?? "—" },
+  ];
+  const departmentColumns: SimpleMasterColumn<SimpleMasterRecord>[] = [
+    { header: "Name", render: (record) => record.name },
+    { header: "Status", className: "w-[120px]", render: (record) => basicBadge(record.is_active) },
+    { header: "Description", className: "max-w-[260px]", render: (record) => record.description ?? "—" },
+  ];
+  const roleColumns: SimpleMasterColumn<SimpleMasterRecord>[] = [
+    { header: "Name", render: (record) => record.name },
+    { header: "Status", className: "w-[120px]", render: (record) => basicBadge(record.is_active) },
+    { header: "Description", className: "max-w-[260px]", render: (record) => record.description ?? "—" },
+  ];
+  const shiftColumns: SimpleMasterColumn<WorkerShiftRecord>[] = [
+    { header: "Name", render: (record) => record.name },
+    { header: "Status", className: "w-[120px]", render: (record) => basicBadge(record.is_active) },
+    {
+      header: "Timing",
+      className: "w-[160px]",
+      render: (record) => {
+        const start = formatTime(record.start_time);
+        const end = formatTime(record.end_time);
+        return start && end ? `${start} – ${end}` : "—";
+      },
+    },
+    { header: "Notes", className: "max-w-[220px]", render: (record) => record.description ?? "—" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        Supporting masters ensure dropdowns and validations remain consistent across the application.
+      </p>
+      <div className="grid gap-6 xl:grid-cols-2">
+        <SimpleMasterCard<SimpleMasterRecord>
+          title="Item categories"
+          description="Organise materials into coherent reporting groups."
+          emptyMessage="No categories defined yet."
+          entity="itemCategory"
+          state={itemCategories}
+          columns={categoryColumns}
+          onCreate={onCreate}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+        <SimpleMasterCard<VendorRecord>
+          title="Vendors"
+          description="Approved suppliers for procurement and costing."
+          emptyMessage="No vendors captured yet."
+          entity="vendor"
+          state={vendors}
+          columns={vendorColumns}
+          onCreate={onCreate}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+        <SimpleMasterCard<SimpleMasterRecord>
+          title="Worker departments"
+          description="Functional areas used for scheduling and permissions."
+          emptyMessage="No departments maintained yet."
+          entity="department"
+          state={departments}
+          columns={departmentColumns}
+          onCreate={onCreate}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+        <SimpleMasterCard<SimpleMasterRecord>
+          title="Worker roles"
+          description="Role definitions support authorisations and skill tracking."
+          emptyMessage="No roles created yet."
+          entity="workerRole"
+          state={workerRoles}
+          columns={roleColumns}
+          onCreate={onCreate}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+        <SimpleMasterCard<WorkerShiftRecord>
+          title="Worker shifts"
+          description="Standard shift timings for planning and compliance."
+          emptyMessage="No shifts configured yet."
+          entity="workerShift"
+          state={workerShifts}
+          columns={shiftColumns}
+          onCreate={onCreate}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+      </div>
+    </div>
+  );
+};
+
 type ItemsSectionProps = SectionProps<ItemRecord>;
 
 const ItemsSection = ({ onCreate, onEdit, onDelete }: ItemsSectionProps) => {
-  const { items } = useMastersData();
+  const { items, itemCategories } = useMastersData();
   const [searchTerm, setSearchTerm] = useState("");
   const [category, setCategory] = useState("all");
   const [status, setStatus] = useState("all");
+  const categoryOptions = useMemo(() => {
+    return itemCategories.records
+      .filter((record) => record.is_active)
+      .map((record) => record.name)
+      .sort((a, b) => a.localeCompare(b));
+  }, [itemCategories.records]);
 
   const filtered = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();
@@ -526,7 +885,7 @@ const ItemsSection = ({ onCreate, onEdit, onDelete }: ItemsSectionProps) => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All categories</SelectItem>
-                {itemCategoryOptions.map((option) => (
+                {categoryOptions.map((option) => (
                   <SelectItem key={option} value={option}>
                     {option}
                   </SelectItem>
@@ -1248,8 +1607,30 @@ const MasterFormDialog = ({ state, onClose, onSuccess }: MasterFormDialogProps) 
           <WorkerForm mode={mode} record={record as WorkerRecord | null} onSuccess={() => onSuccess("worker")} onCancel={onClose} />
         ) : entity === "process" ? (
           <ProcessForm mode={mode} record={record as ProcessRecord | null} onSuccess={() => onSuccess("process")} onCancel={onClose} />
-        ) : (
+        ) : entity === "bom" ? (
           <BomForm mode={mode} record={record as BomTemplateRecord | null} onSuccess={() => onSuccess("bom")} onCancel={onClose} />
+        ) : entity === "itemCategory" || entity === "department" || entity === "workerRole" ? (
+          <BasicMasterForm
+            entity={entity as BasicMasterEntity}
+            mode={mode}
+            record={record as SimpleMasterRecord | null}
+            onSuccess={() => onSuccess(entity)}
+            onCancel={onClose}
+          />
+        ) : entity === "vendor" ? (
+          <VendorForm
+            mode={mode}
+            record={record as VendorRecord | null}
+            onSuccess={() => onSuccess("vendor")}
+            onCancel={onClose}
+          />
+        ) : (
+          <WorkerShiftForm
+            mode={mode}
+            record={record as WorkerShiftRecord | null}
+            onSuccess={() => onSuccess("workerShift")}
+            onCancel={onClose}
+          />
         )}
       </DialogContent>
     </Dialog>
@@ -1264,16 +1645,19 @@ type MasterActionDialogProps = {
 
 const MasterActionDialog = ({ state, onCancel, onConfirm }: MasterActionDialogProps) => {
   const { open, entity } = state;
-  const label =
-    entity === "item"
-      ? "item"
-      : entity === "uom"
-      ? "unit of measure"
-      : entity === "worker"
-      ? "worker"
-      : entity === "process"
-      ? "process"
-      : "BOM template";
+  const labelMap: Record<FormEntity, string> = {
+    item: "item",
+    uom: "unit of measure",
+    worker: "worker",
+    process: "process",
+    bom: "BOM template",
+    itemCategory: "item category",
+    vendor: "vendor",
+    department: "department",
+    workerRole: "worker role",
+    workerShift: "worker shift",
+  };
+  const label = labelMap[entity];
 
   return (
     <AlertDialog open={open} onOpenChange={(next) => (!next ? onCancel() : null)}>
@@ -1329,7 +1713,19 @@ const ItemForm = ({ mode, record, onSuccess, onCancel }: ItemFormProps) => {
 
   const form = useForm<ItemFormValues>({ defaultValues: defaults });
   const [error, setError] = useState<string | null>(null);
-  const { uoms } = useMastersData();
+  const { uoms, itemCategories, vendors } = useMastersData();
+  const categoryOptions = useMemo(() => {
+    return itemCategories.records
+      .filter((record) => record.is_active)
+      .map((record) => record.name)
+      .sort((a, b) => a.localeCompare(b));
+  }, [itemCategories.records]);
+  const vendorOptions = useMemo(() => {
+    return vendors.records
+      .filter((record) => record.is_active)
+      .map((record) => record.name)
+      .sort((a, b) => a.localeCompare(b));
+  }, [vendors.records]);
 
   const onSubmit = form.handleSubmit(async (values) => {
     setError(null);
@@ -1414,10 +1810,22 @@ const ItemForm = ({ mode, record, onSuccess, onCancel }: ItemFormProps) => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Category</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Category" {...field} />
-                  </FormControl>
-                  <FormDescription>Use categories to group items in reports.</FormDescription>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">No category</SelectItem>
+                      {categoryOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>Manage categories under Reference Masters.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -1503,9 +1911,22 @@ const ItemForm = ({ mode, record, onSuccess, onCancel }: ItemFormProps) => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Vendor</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Supplier name" {...field} />
-                  </FormControl>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select vendor" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">No vendor</SelectItem>
+                      {vendorOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>Maintain vendor details in Reference Masters.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -1760,6 +2181,31 @@ const WorkerForm = ({ mode, record, onSuccess, onCancel }: WorkerFormProps) => {
 
   const form = useForm<WorkerFormValues>({ defaultValues: defaults });
   const [error, setError] = useState<string | null>(null);
+  const { departments, workerRoles, workerShifts } = useMastersData();
+  const departmentOptions = useMemo(() => {
+    return departments.records
+      .filter((record) => record.is_active)
+      .map((record) => record.name)
+      .sort((a, b) => a.localeCompare(b));
+  }, [departments.records]);
+  const roleOptions = useMemo(() => {
+    return workerRoles.records
+      .filter((record) => record.is_active)
+      .map((record) => record.name)
+      .sort((a, b) => a.localeCompare(b));
+  }, [workerRoles.records]);
+  const shiftOptions = useMemo(() => {
+    return workerShifts.records
+      .filter((record) => record.is_active)
+      .map((record) => ({
+        value: record.name,
+        label:
+          record.start_time && record.end_time
+            ? `${record.name} (${record.start_time.slice(0, 5)}–${record.end_time.slice(0, 5)})`
+            : record.name,
+      }))
+      .sort((a, b) => a.value.localeCompare(b.value));
+  }, [workerShifts.records]);
 
   const onSubmit = form.handleSubmit(async (values) => {
     setError(null);
@@ -1842,9 +2288,22 @@ const WorkerForm = ({ mode, record, onSuccess, onCancel }: WorkerFormProps) => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Role</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Operator role" {...field} />
-                  </FormControl>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">No role</SelectItem>
+                      {roleOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>Define roles in Reference Masters.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -1855,9 +2314,22 @@ const WorkerForm = ({ mode, record, onSuccess, onCancel }: WorkerFormProps) => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Department</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Department" {...field} />
-                  </FormControl>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select department" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">No department</SelectItem>
+                      {departmentOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>Departments are managed under Reference Masters.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -1868,9 +2340,22 @@ const WorkerForm = ({ mode, record, onSuccess, onCancel }: WorkerFormProps) => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Shift</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Shift" {...field} />
-                  </FormControl>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select shift" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">No shift</SelectItem>
+                      {shiftOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>Shift definitions are managed in Reference Masters.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -1935,6 +2420,485 @@ const WorkerForm = ({ mode, record, onSuccess, onCancel }: WorkerFormProps) => {
               Cancel
             </Button>
             <Button type="submit">{mode === "create" ? "Create worker" : "Save changes"}</Button>
+          </DialogFooter>
+        </form>
+      </Form>
+    </>
+  );
+};
+
+type BasicMasterEntity = "itemCategory" | "department" | "workerRole";
+
+type BasicMasterFormValues = {
+  name: string;
+  description: string;
+  status: (typeof simpleMasterStatusOptions)[number];
+};
+
+type BasicMasterFormProps = {
+  entity: BasicMasterEntity;
+  mode: FormMode;
+  record: SimpleMasterRecord | null;
+  onSuccess: () => Promise<void>;
+  onCancel: () => void;
+};
+
+const basicMasterCopy: Record<BasicMasterEntity, {
+  createTitle: string;
+  editTitle: string;
+  description: string;
+  endpoint: string;
+  singular: string;
+}> = {
+  itemCategory: {
+    createTitle: "Create item category",
+    editTitle: "Edit item category",
+    description: "Use categories to group items in reports and BOM templates.",
+    endpoint: "/api/item-categories",
+    singular: "category",
+  },
+  department: {
+    createTitle: "Create department",
+    editTitle: "Edit department",
+    description: "Departments organise workers for scheduling, access, and reporting.",
+    endpoint: "/api/departments",
+    singular: "department",
+  },
+  workerRole: {
+    createTitle: "Create worker role",
+    editTitle: "Edit worker role",
+    description: "Roles outline responsibilities and support skills tracking.",
+    endpoint: "/api/worker-roles",
+    singular: "role",
+  },
+};
+
+const BasicMasterForm = ({ entity, mode, record, onSuccess, onCancel }: BasicMasterFormProps) => {
+  const config = basicMasterCopy[entity];
+  const defaults: BasicMasterFormValues = {
+    name: record?.name ?? "",
+    description: record?.description ?? "",
+    status: record?.is_active ? "Active" : "Inactive",
+  };
+
+  const form = useForm<BasicMasterFormValues>({ defaultValues: defaults });
+  const [error, setError] = useState<string | null>(null);
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    setError(null);
+    try {
+      const payload = {
+        name: values.name,
+        description: values.description ? values.description : undefined,
+        isActive: values.status === "Active",
+      };
+
+      if (mode === "create") {
+        await request<SimpleMasterRecord>(config.endpoint, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      } else if (record) {
+        await request<SimpleMasterRecord>(`${config.endpoint}/${record.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            name: values.name,
+            description: values.description ? values.description : null,
+            isActive: values.status === "Active",
+          }),
+        });
+      }
+      await onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save record");
+    }
+  });
+
+  const submitLabel = mode === "create" ? `Create ${config.singular}` : "Save changes";
+
+  return (
+    <>
+      <DialogHeader className="space-y-2">
+        <DialogTitle>{mode === "create" ? config.createTitle : config.editTitle}</DialogTitle>
+        <DialogDescription>{config.description}</DialogDescription>
+      </DialogHeader>
+      <Form {...form}>
+        <form onSubmit={onSubmit} className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="name"
+              rules={{ required: "Name is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {simpleMasterStatusOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description</FormLabel>
+                <FormControl>
+                  <Textarea rows={3} placeholder="Optional notes" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit">{submitLabel}</Button>
+          </DialogFooter>
+        </form>
+      </Form>
+    </>
+  );
+};
+
+type VendorFormValues = {
+  name: string;
+  contactInfo: string;
+  description: string;
+  status: (typeof simpleMasterStatusOptions)[number];
+};
+
+type VendorFormProps = {
+  mode: FormMode;
+  record: VendorRecord | null;
+  onSuccess: () => Promise<void>;
+  onCancel: () => void;
+};
+
+const VendorForm = ({ mode, record, onSuccess, onCancel }: VendorFormProps) => {
+  const defaults: VendorFormValues = {
+    name: record?.name ?? "",
+    contactInfo: record?.contact_info ?? "",
+    description: record?.description ?? "",
+    status: record?.is_active ? "Active" : "Inactive",
+  };
+
+  const form = useForm<VendorFormValues>({ defaultValues: defaults });
+  const [error, setError] = useState<string | null>(null);
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    setError(null);
+    try {
+      if (mode === "create") {
+        await request<VendorRecord>("/api/vendors", {
+          method: "POST",
+          body: JSON.stringify({
+            name: values.name,
+            contactInfo: values.contactInfo ? values.contactInfo : undefined,
+            description: values.description ? values.description : undefined,
+            isActive: values.status === "Active",
+          }),
+        });
+      } else if (record) {
+        await request<VendorRecord>(`/api/vendors/${record.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            name: values.name,
+            contactInfo: values.contactInfo ? values.contactInfo : null,
+            description: values.description ? values.description : null,
+            isActive: values.status === "Active",
+          }),
+        });
+      }
+      await onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save vendor");
+    }
+  });
+
+  return (
+    <>
+      <DialogHeader className="space-y-2">
+        <DialogTitle>{mode === "create" ? "Create vendor" : "Edit vendor"}</DialogTitle>
+        <DialogDescription>Maintain supplier details for procurement and costing workflows.</DialogDescription>
+      </DialogHeader>
+      <Form {...form}>
+        <form onSubmit={onSubmit} className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="name"
+              rules={{ required: "Name is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Vendor name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {simpleMasterStatusOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="contactInfo"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Contact information</FormLabel>
+                <FormControl>
+                  <Input placeholder="Phone, email, or contact person" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Notes</FormLabel>
+                <FormControl>
+                  <Textarea rows={3} placeholder="Optional notes" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit">{mode === "create" ? "Create vendor" : "Save changes"}</Button>
+          </DialogFooter>
+        </form>
+      </Form>
+    </>
+  );
+};
+
+type WorkerShiftFormValues = {
+  name: string;
+  description: string;
+  startTime: string;
+  endTime: string;
+  status: (typeof simpleMasterStatusOptions)[number];
+};
+
+type WorkerShiftFormProps = {
+  mode: FormMode;
+  record: WorkerShiftRecord | null;
+  onSuccess: () => Promise<void>;
+  onCancel: () => void;
+};
+
+const WorkerShiftForm = ({ mode, record, onSuccess, onCancel }: WorkerShiftFormProps) => {
+  const defaults: WorkerShiftFormValues = {
+    name: record?.name ?? "",
+    description: record?.description ?? "",
+    startTime: record?.start_time ? record.start_time.slice(0, 5) : "",
+    endTime: record?.end_time ? record.end_time.slice(0, 5) : "",
+    status: record?.is_active ? "Active" : "Inactive",
+  };
+
+  const form = useForm<WorkerShiftFormValues>({ defaultValues: defaults });
+  const [error, setError] = useState<string | null>(null);
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    setError(null);
+    try {
+      if (mode === "create") {
+        await request<WorkerShiftRecord>("/api/worker-shifts", {
+          method: "POST",
+          body: JSON.stringify({
+            name: values.name,
+            description: values.description ? values.description : undefined,
+            startTime: values.startTime || undefined,
+            endTime: values.endTime || undefined,
+            isActive: values.status === "Active",
+          }),
+        });
+      } else if (record) {
+        await request<WorkerShiftRecord>(`/api/worker-shifts/${record.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            name: values.name,
+            description: values.description ? values.description : null,
+            startTime: values.startTime || null,
+            endTime: values.endTime || null,
+            isActive: values.status === "Active",
+          }),
+        });
+      }
+      await onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save shift");
+    }
+  });
+
+  return (
+    <>
+      <DialogHeader className="space-y-2">
+        <DialogTitle>{mode === "create" ? "Create worker shift" : "Edit worker shift"}</DialogTitle>
+        <DialogDescription>Standard shift windows help align production planning and compliance requirements.</DialogDescription>
+      </DialogHeader>
+      <Form {...form}>
+        <form onSubmit={onSubmit} className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="name"
+              rules={{ required: "Name is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Shift name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {simpleMasterStatusOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="startTime"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Start time</FormLabel>
+                  <FormControl>
+                    <Input type="time" {...field} />
+                  </FormControl>
+                  <FormDescription>Leave blank for flexible start.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="endTime"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>End time</FormLabel>
+                  <FormControl>
+                    <Input type="time" {...field} />
+                  </FormControl>
+                  <FormDescription>Leave blank for flexible end.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description</FormLabel>
+                <FormControl>
+                  <Textarea rows={3} placeholder="Optional notes" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit">{mode === "create" ? "Create shift" : "Save changes"}</Button>
           </DialogFooter>
         </form>
       </Form>
