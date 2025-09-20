@@ -1,8 +1,7 @@
-import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { prisma } from "@/lib/prisma";
+import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
 import { processCreateSchema } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
@@ -12,15 +11,27 @@ export async function GET(request: NextRequest) {
   const where = activeFilter === "true" ? { is_active: true } : undefined;
 
   try {
-    const processes = await prisma.process.findMany({
-      where,
-      orderBy: [
-        { sequence: { sort: "asc", nulls: "last" } },
-        { name: "asc" },
-      ],
-    });
+    const supabase = getSupabaseServerClient();
+    let query = supabase
+      .from("processes")
+      .select("*")
+      .order("sequence", { ascending: true, nullsFirst: false })
+      .order("name", { ascending: true });
 
-    return success(processes);
+    if (where?.is_active) {
+      query = query.eq("is_active", true);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      return failure("Unable to fetch processes", {
+        status: 500,
+        details: error.message,
+      });
+    }
+
+    return success(data ?? []);
   } catch (error) {
     return failure("Unable to fetch processes", {
       status: 500,
@@ -41,28 +52,35 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const process = await prisma.process.create({
-      data: {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("processes")
+      .insert({
         slug: parsed.data.slug,
         name: parsed.data.name,
         description: parsed.data.description ?? null,
         sequence: parsed.data.sequence ?? null,
         is_active: parsed.data.isActive ?? true,
-      },
-    });
+      })
+      .select("*")
+      .single();
 
-    return success(process, 201);
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
+    if (error) {
+      if (error.code === "23505") {
+        return failure("Unable to create process", {
+          status: 409,
+          details: error.message,
+        });
+      }
+
       return failure("Unable to create process", {
-        status: 409,
+        status: 500,
         details: error.message,
       });
     }
 
+    return success(data, 201);
+  } catch (error) {
     return failure("Unable to create process", {
       status: 500,
       details: error instanceof Error ? error.message : String(error),

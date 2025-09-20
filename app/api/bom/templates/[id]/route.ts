@@ -1,9 +1,8 @@
-import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { BOM_TEMPLATE_INCLUDE } from "@/lib/selects";
-import { prisma } from "@/lib/prisma";
+import { BOM_TEMPLATE_SELECT } from "@/lib/selects";
+import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
 import { bomTemplateUpdateSchema } from "@/lib/validation";
 
 export async function GET(
@@ -11,16 +10,26 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const template = await prisma.bomTemplate.findUnique({
-      where: { id: params.id },
-      include: BOM_TEMPLATE_INCLUDE,
-    });
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("bom_templates")
+      .select(BOM_TEMPLATE_SELECT)
+      .eq("id", params.id)
+      .order("position", { ascending: true, foreignTable: "components" })
+      .maybeSingle();
 
-    if (!template) {
+    if (error) {
+      return failure("Unable to fetch BOM template", {
+        status: 500,
+        details: error.message,
+      });
+    }
+
+    if (!data) {
       return failure("BOM template not found", { status: 404 });
     }
 
-    return success(template);
+    return success(data);
   } catch (error) {
     return failure("Unable to fetch BOM template", {
       status: 500,
@@ -43,9 +52,21 @@ export async function PATCH(
     });
   }
 
-  const existing = await prisma.bomTemplate.findUnique({
-    where: { id: params.id },
-  });
+  const supabase = getSupabaseServerClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("bom_templates")
+    .select(
+      "id, components:bom_template_items(id,item_id,expected_quantity,unit,position)"
+    )
+    .eq("id", params.id)
+    .maybeSingle();
+
+  if (existingError) {
+    return failure("Unable to fetch BOM template", {
+      status: 500,
+      details: existingError.message,
+    });
+  }
 
   if (!existing) {
     return failure("BOM template not found", { status: 404 });
@@ -62,7 +83,7 @@ export async function PATCH(
     components,
   } = parsed.data;
 
-  const data: Prisma.BomTemplateUpdateInput = {};
+  const data: Record<string, unknown> = {};
 
   if (code !== undefined) data.code = code;
   if (name !== undefined) data.name = name;
@@ -73,54 +94,96 @@ export async function PATCH(
   if (isActive !== undefined) data.is_active = isActive;
 
   try {
-    await prisma.$transaction(async (tx) => {
-      if (Object.keys(data).length > 0) {
-        await tx.bomTemplate.update({
-          where: { id: params.id },
-          data,
+    if (Object.keys(data).length > 0) {
+      const { error: updateError } = await supabase
+        .from("bom_templates")
+        .update(data)
+        .eq("id", params.id);
+
+      if (updateError) {
+        if (updateError.code === "23505") {
+          return failure("Unable to update BOM template", {
+            status: 409,
+            details: updateError.message,
+          });
+        }
+
+        return failure("Unable to update BOM template", {
+          status: 500,
+          details: updateError.message,
+        });
+      }
+    }
+
+    if (components !== undefined) {
+      const previousComponents = existing.components ?? [];
+
+      const { error: deleteError } = await supabase
+        .from("bom_template_items")
+        .delete()
+        .eq("bom_template_id", params.id);
+
+      if (deleteError) {
+        return failure("Unable to update BOM template components", {
+          status: 500,
+          details: deleteError.message,
         });
       }
 
-      if (components !== undefined) {
-        await tx.bomTemplateItem.deleteMany({
-          where: { bom_template_id: params.id },
-        });
+      if (components.length > 0) {
+        const payload = components.map((component, index) => ({
+          bom_template_id: params.id,
+          item_id: component.itemId,
+          expected_quantity: component.expectedQuantity,
+          unit: component.unit,
+          position: component.position ?? index,
+        }));
 
-        if (components.length > 0) {
-          await tx.bomTemplateItem.createMany({
-            data: components.map((component, index) => ({
-              bom_template_id: params.id,
-              item_id: component.itemId,
-              expected_quantity: component.expectedQuantity,
-              unit: component.unit,
-              position: component.position ?? index,
-            })),
+        const { error: insertError } = await supabase
+          .from("bom_template_items")
+          .insert(payload);
+
+        if (insertError) {
+          if (previousComponents.length > 0) {
+            await supabase.from("bom_template_items").insert(
+              previousComponents.map((component) => ({
+                bom_template_id: params.id,
+                item_id: component.item_id,
+                expected_quantity: component.expected_quantity,
+                unit: component.unit,
+                position: component.position,
+              }))
+            );
+          }
+
+          if (insertError.code === "23505") {
+            return failure("Unable to update BOM template", {
+              status: 409,
+              details: insertError.message,
+            });
+          }
+
+          return failure("Unable to update BOM template components", {
+            status: 500,
+            details: insertError.message,
           });
         }
       }
-    });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      return failure("Unable to update BOM template", {
-        status: 409,
-        details: error.message,
-      });
     }
 
-    return failure("Unable to update BOM template", {
-      status: 500,
-      details: error instanceof Error ? error.message : String(error),
-    });
-  }
+    const { data: template, error: fetchError } = await supabase
+      .from("bom_templates")
+      .select(BOM_TEMPLATE_SELECT)
+      .eq("id", params.id)
+      .order("position", { ascending: true, foreignTable: "components" })
+      .maybeSingle();
 
-  try {
-    const template = await prisma.bomTemplate.findUnique({
-      where: { id: params.id },
-      include: BOM_TEMPLATE_INCLUDE,
-    });
+    if (fetchError) {
+      return failure("Updated template but unable to retrieve", {
+        status: 500,
+        details: fetchError.message,
+      });
+    }
 
     if (!template) {
       return failure("BOM template not found", { status: 404 });
@@ -128,7 +191,7 @@ export async function PATCH(
 
     return success(template);
   } catch (error) {
-    return failure("Updated template but unable to retrieve", {
+    return failure("Unable to update BOM template", {
       status: 500,
       details: error instanceof Error ? error.message : String(error),
     });
@@ -140,17 +203,24 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.bomTemplate.delete({
-      where: { id: params.id },
-    });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
+    const supabase = getSupabaseServerClient();
+    const { error, count } = await supabase
+      .from("bom_templates")
+      .delete({ count: "exact" })
+      .eq("id", params.id);
+
+    if (error) {
+      return failure("Unable to delete BOM template", {
+        status: 500,
+        details: error.message,
+      });
+    }
+
+    if (!count) {
       return failure("BOM template not found", { status: 404 });
     }
 
+  } catch (error) {
     return failure("Unable to delete BOM template", {
       status: 500,
       details: error instanceof Error ? error.message : String(error),
