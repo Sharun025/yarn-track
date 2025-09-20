@@ -56,6 +56,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Tabs,
   TabsContent,
@@ -548,63 +549,67 @@ const ItemsSection = ({ onCreate, onEdit, onDelete }: ItemsSectionProps) => {
           </div>
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>SKU</TableHead>
-              <TableHead>Item</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Updated</TableHead>
-              <TableHead className="w-[80px] text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                  Loading items…
-                </TableCell>
-              </TableRow>
-            ) : items.error ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-rose-600">
-                  {items.error.message}
-                </TableCell>
-              </TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                  No items match the current filters.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item.sku}</TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <p>{item.name}</p>
-                      <p className="text-xs text-muted-foreground">UOM: {item.unit}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>{item.category ?? "—"}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className={statusBadge[item.status ?? ""] ?? "border bg-muted text-muted-foreground"}>
-                      {item.status ?? "Unspecified"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right text-sm text-muted-foreground">
-                    {new Date(item.updated_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <RowActions onEdit={() => onEdit(item)} onDelete={() => onDelete(item)} />
-                  </TableCell>
+        <ScrollArea>
+          <div className="min-w-[760px]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Item</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Updated</TableHead>
+                  <TableHead className="w-[80px] text-right">Actions</TableHead>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              </TableHeader>
+              <TableBody>
+                {items.isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                      Loading items…
+                    </TableCell>
+                  </TableRow>
+                ) : items.error ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-sm text-rose-600">
+                      {items.error.message}
+                    </TableCell>
+                  </TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                      No items match the current filters.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.sku}</TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <p>{item.name}</p>
+                          <p className="text-xs text-muted-foreground">UOM: {item.unit}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>{item.category ?? "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={statusBadge[item.status ?? ""] ?? "border bg-muted text-muted-foreground"}>
+                          {item.status ?? "Unspecified"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground">
+                        {new Date(item.updated_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <RowActions onEdit={() => onEdit(item)} onDelete={() => onDelete(item)} />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </ScrollArea>
       </CardContent>
     </Card>
   );
@@ -694,58 +699,62 @@ const UomsSection = ({ onCreate, onEdit, onDelete }: UomsSectionProps) => {
           </div>
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Code</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead className="text-center">Precision</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead className="w-[80px] text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {uoms.isLoading ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
-                  Loading units…
-                </TableCell>
-              </TableRow>
-            ) : uoms.error ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center text-sm text-rose-600">
-                  {uoms.error.message}
-                </TableCell>
-              </TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
-                  No units found for the current filters.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((unit) => (
-                <TableRow key={unit.id}>
-                  <TableCell className="font-medium uppercase">{unit.code}</TableCell>
-                  <TableCell>{unit.name}</TableCell>
-                  <TableCell>{unit.type ?? "—"}</TableCell>
-                  <TableCell className="text-center">{unit.precision ?? 0}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className={unit.is_active ? statusBadge.Active : statusBadge.Inactive}>
-                      {unit.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{unit.description ?? "—"}</TableCell>
-                  <TableCell className="text-right">
-                    <RowActions onEdit={() => onEdit(unit)} onDelete={() => onDelete(unit)} />
-                  </TableCell>
+        <ScrollArea>
+          <div className="min-w-[880px]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="text-center">Precision</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="w-[80px] text-right">Actions</TableHead>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              </TableHeader>
+              <TableBody>
+                {uoms.isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                      Loading units…
+                    </TableCell>
+                  </TableRow>
+                ) : uoms.error ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-sm text-rose-600">
+                      {uoms.error.message}
+                    </TableCell>
+                  </TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                      No units found for the current filters.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map((unit) => (
+                    <TableRow key={unit.id}>
+                      <TableCell className="font-medium uppercase">{unit.code}</TableCell>
+                      <TableCell>{unit.name}</TableCell>
+                      <TableCell>{unit.type ?? "—"}</TableCell>
+                      <TableCell className="text-center">{unit.precision ?? 0}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={unit.is_active ? statusBadge.Active : statusBadge.Inactive}>
+                          {unit.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{unit.description ?? "—"}</TableCell>
+                      <TableCell className="text-right">
+                        <RowActions onEdit={() => onEdit(unit)} onDelete={() => onDelete(unit)} />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </ScrollArea>
       </CardContent>
     </Card>
   );
@@ -847,56 +856,60 @@ const WorkersSection = ({ onCreate, onEdit, onDelete }: WorkersSectionProps) => 
           </div>
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Code</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Department</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-[80px] text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {workers.isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                  Loading workers…
-                </TableCell>
-              </TableRow>
-            ) : workers.error ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-rose-600">
-                  {workers.error.message}
-                </TableCell>
-              </TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                  No workers match the current filters.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((worker) => (
-                <TableRow key={worker.id}>
-                  <TableCell className="font-medium uppercase">{worker.code}</TableCell>
-                  <TableCell>{worker.display_name}</TableCell>
-                  <TableCell>{worker.role ?? "—"}</TableCell>
-                  <TableCell>{worker.department ?? "—"}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className={statusBadge[worker.status ?? ""] ?? "border bg-muted text-muted-foreground"}>
-                      {worker.status ?? "Active"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <RowActions onEdit={() => onEdit(worker)} onDelete={() => onDelete(worker)} />
-                  </TableCell>
+        <ScrollArea>
+          <div className="min-w-[760px]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-[80px] text-right">Actions</TableHead>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              </TableHeader>
+              <TableBody>
+                {workers.isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                      Loading workers…
+                    </TableCell>
+                  </TableRow>
+                ) : workers.error ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-sm text-rose-600">
+                      {workers.error.message}
+                    </TableCell>
+                  </TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                      No workers match the current filters.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map((worker) => (
+                    <TableRow key={worker.id}>
+                      <TableCell className="font-medium uppercase">{worker.code}</TableCell>
+                      <TableCell>{worker.display_name}</TableCell>
+                      <TableCell>{worker.role ?? "—"}</TableCell>
+                      <TableCell>{worker.department ?? "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={statusBadge[worker.status ?? ""] ?? "border bg-muted text-muted-foreground"}>
+                          {worker.status ?? "Active"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <RowActions onEdit={() => onEdit(worker)} onDelete={() => onDelete(worker)} />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </ScrollArea>
       </CardContent>
     </Card>
   );
@@ -919,57 +932,61 @@ const ProcessesSection = ({ onCreate, onEdit, onDelete }: ProcessesSectionProps)
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Sequence</TableHead>
-              <TableHead>Process</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-[80px] text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {processes.isLoading ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                  Loading processes…
-                </TableCell>
-              </TableRow>
-            ) : processes.error ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-rose-600">
-                  {processes.error.message}
-                </TableCell>
-              </TableRow>
-            ) : processes.records.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                  No processes captured yet.
-                </TableCell>
-              </TableRow>
-            ) : (
-              processes.records
-                .slice()
-                .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
-                .map((process) => (
-                  <TableRow key={process.id}>
-                    <TableCell className="text-sm text-muted-foreground">{process.sequence ?? "—"}</TableCell>
-                    <TableCell className="font-medium">{process.name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{process.description ?? "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={process.is_active ? statusBadge.Active : statusBadge.Inactive}>
-                        {process.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <RowActions onEdit={() => onEdit(process)} onDelete={() => onDelete(process)} />
+        <ScrollArea>
+          <div className="min-w-[720px]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Sequence</TableHead>
+                  <TableHead>Process</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-[80px] text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {processes.isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                      Loading processes…
                     </TableCell>
                   </TableRow>
-                ))
-            )}
-          </TableBody>
-        </Table>
+                ) : processes.error ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-sm text-rose-600">
+                      {processes.error.message}
+                    </TableCell>
+                  </TableRow>
+                ) : processes.records.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                      No processes captured yet.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  processes.records
+                    .slice()
+                    .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
+                    .map((process) => (
+                      <TableRow key={process.id}>
+                        <TableCell className="text-sm text-muted-foreground">{process.sequence ?? "—"}</TableCell>
+                        <TableCell className="font-medium">{process.name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{process.description ?? "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={process.is_active ? statusBadge.Active : statusBadge.Inactive}>
+                            {process.is_active ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <RowActions onEdit={() => onEdit(process)} onDelete={() => onDelete(process)} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </ScrollArea>
       </CardContent>
     </Card>
   );

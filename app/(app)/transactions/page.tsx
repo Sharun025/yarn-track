@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useApi } from "@/lib/hooks/useApi";
 
 const formGuide = [
@@ -277,56 +278,60 @@ export default function TransactionsPage() {
           </Button>
         </CardHeader>
         <CardContent className="px-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Batch</TableHead>
-                <TableHead>Process</TableHead>
-                <TableHead>Started</TableHead>
-                <TableHead>Supervisor</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {batchesLoading && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                    Loading batches…
-                  </TableCell>
-                </TableRow>
-              )}
-              {batchError && !batchesLoading && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-sm text-rose-600">
-                    Failed to load batches. Please try again.
-                  </TableCell>
-                </TableRow>
-              )}
-              {!batchesLoading && !batchError && openBatches.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                    No active batches yet. Create one to get started.
-                  </TableCell>
-                </TableRow>
-              )}
-              {openBatches.map((batch) => (
-                <TableRow key={batch.rawId}>
-                  <TableCell className="font-medium">{batch.id}</TableCell>
-                  <TableCell>{batch.process}</TableCell>
-                  <TableCell>{batch.started}</TableCell>
-                  <TableCell>{batch.supervisor}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={batch.status === "Paused" ? "destructive" : "secondary"}
-                      className="font-medium"
-                    >
-                      {batch.status}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <ScrollArea>
+            <div className="min-w-[640px] px-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Batch</TableHead>
+                    <TableHead>Process</TableHead>
+                    <TableHead>Started</TableHead>
+                    <TableHead>Supervisor</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {batchesLoading && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                        Loading batches…
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {batchError && !batchesLoading && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-sm text-rose-600">
+                        Failed to load batches. Please try again.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {!batchesLoading && !batchError && openBatches.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                        No active batches yet. Create one to get started.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {openBatches.map((batch) => (
+                    <TableRow key={batch.rawId}>
+                      <TableCell className="font-medium">{batch.id}</TableCell>
+                      <TableCell>{batch.process}</TableCell>
+                      <TableCell>{batch.started}</TableCell>
+                      <TableCell>{batch.supervisor}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={batch.status === "Paused" ? "destructive" : "secondary"}
+                          className="font-medium"
+                        >
+                          {batch.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </ScrollArea>
         </CardContent>
       </Card>
 
