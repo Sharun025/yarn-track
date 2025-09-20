@@ -293,6 +293,22 @@ export default function DashboardPage() {
   const loadingProcesses = processesLoading || batchesLoading;
   const loadingMovements = movementsLoading;
 
+  const processState = (() => {
+    if (loadingProcesses) {
+      return { type: "loading" as const };
+    }
+
+    if (processError || batchError) {
+      return { type: "error" as const };
+    }
+
+    if (processRows.length === 0) {
+      return { type: "empty" as const };
+    }
+
+    return { type: "data" as const, rows: processRows };
+  })();
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -360,7 +376,7 @@ export default function DashboardPage() {
         </div>
         <Card>
           <CardContent className="px-0">
-            <ScrollArea>
+            <ScrollArea className="hidden md:block">
               <div className="min-w-[680px] px-4">
                 <Table>
                   <TableHeader>
@@ -373,7 +389,7 @@ export default function DashboardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {loadingProcesses && (
+                    {processState.type === "loading" && (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
                           Loading process data…
@@ -381,7 +397,7 @@ export default function DashboardPage() {
                       </TableRow>
                     )}
 
-                    {!loadingProcesses && (processError || batchError) && (
+                    {processState.type === "error" && (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center text-sm text-rose-600">
                           Unable to load process overview. Please retry shortly.
@@ -389,7 +405,7 @@ export default function DashboardPage() {
                       </TableRow>
                     )}
 
-                    {!loadingProcesses && !processError && !batchError && processRows.length === 0 && (
+                    {processState.type === "empty" && (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
                           No processes configured yet.
@@ -397,31 +413,87 @@ export default function DashboardPage() {
                       </TableRow>
                     )}
 
-                    {processRows.map((row) => (
-                      <TableRow key={row.process}>
-                        <TableCell className="font-medium">{row.process}</TableCell>
-                        <TableCell>{row.batches}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="secondary"
-                            className={cn(
-                              "text-xs font-semibold",
-                              statusStyles[row.status] ?? "bg-slate-100 text-slate-700"
-                            )}
-                          >
-                            {row.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{row.efficiency}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {row.nextAction}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {processState.type === "data" &&
+                      processState.rows.map((row) => (
+                        <TableRow key={row.process}>
+                          <TableCell className="font-medium">{row.process}</TableCell>
+                          <TableCell>{row.batches}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="secondary"
+                              className={cn(
+                                "text-xs font-semibold",
+                                statusStyles[row.status] ?? "bg-slate-100 text-slate-700"
+                              )}
+                            >
+                              {row.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{row.efficiency}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {row.nextAction}
+                          </TableCell>
+                        </TableRow>
+                      ))}
                   </TableBody>
                 </Table>
               </div>
             </ScrollArea>
+
+            <div className="grid gap-3 px-4 py-4 md:hidden">
+              {processState.type === "loading" &&
+                Array.from({ length: 3 }).map((_, index) => (
+                  <div
+                    key={`process-skeleton-${index}`}
+                    className="h-24 animate-pulse rounded-lg border border-dashed bg-muted/40"
+                  />
+                ))}
+
+              {processState.type === "error" && (
+                <div className="rounded-lg border border-dashed bg-rose-100 px-4 py-3 text-sm text-rose-700">
+                  Unable to load process overview. Please retry shortly.
+                </div>
+              )}
+
+              {processState.type === "empty" && (
+                <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
+                  No processes configured yet.
+                </div>
+              )}
+
+              {processState.type === "data" &&
+                processState.rows.map((row) => (
+                  <div key={row.process} className="space-y-3 rounded-lg border bg-background p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold">{row.process}</p>
+                        <p className="text-xs text-muted-foreground">{row.nextAction}</p>
+                      </div>
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "text-xs font-semibold",
+                          statusStyles[row.status] ?? "bg-slate-100 text-slate-700"
+                        )}
+                      >
+                        {row.status}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-xs text-muted-foreground">
+                      <div className="space-y-1">
+                        <p className="text-[0.7rem] uppercase tracking-wide text-muted-foreground/80">
+                          Active batches
+                        </p>
+                        <p className="text-base font-semibold text-foreground">{row.batches}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[0.7rem] uppercase tracking-wide text-muted-foreground/80">Efficiency</p>
+                        <p className="text-base font-semibold text-foreground">{row.efficiency}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
           </CardContent>
         </Card>
       </section>
