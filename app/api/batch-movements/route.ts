@@ -1,13 +1,12 @@
 import { NextRequest } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { BATCH_MOVEMENT_SUMMARY_SELECT } from "@/lib/selects";
-import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
+import { BATCH_MOVEMENT_WITH_BATCH_INCLUDE } from "@/lib/selects";
+import { prisma } from "@/lib/prisma";
 
 const DEFAULT_LIMIT = 10;
 
 export async function GET(request: NextRequest) {
-  const supabase = getSupabaseServerClient();
   const { searchParams } = new URL(request.url);
   const limitParam = searchParams.get("limit");
   const processId = searchParams.get("processId");
@@ -20,26 +19,25 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  let query = supabase
-    .from("batch_movements")
-    .select(BATCH_MOVEMENT_SUMMARY_SELECT)
-    .order("occurred_at", { ascending: false })
-    .limit(limit);
+  const where = processId
+    ? {
+        OR: [{ from_process_id: processId }, { to_process_id: processId }],
+      }
+    : undefined;
 
-  if (processId) {
-    query = query.or(
-      `from_process_id.eq.${processId},to_process_id.eq.${processId}`
-    );
-  }
+  try {
+    const movements = await prisma.batchMovement.findMany({
+      where,
+      orderBy: { occurred_at: "desc" },
+      take: limit,
+      include: BATCH_MOVEMENT_WITH_BATCH_INCLUDE,
+    });
 
-  const { data, error } = await query;
-
-  if (error) {
+    return success(movements);
+  } catch (error) {
     return failure("Unable to fetch batch movements", {
       status: 500,
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  return success(data ?? []);
 }

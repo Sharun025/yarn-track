@@ -1,33 +1,32 @@
+import { Prisma, batch_status } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
-import { BATCH_SELECT } from "@/lib/selects";
+import { BATCH_INCLUDE } from "@/lib/selects";
+import { prisma } from "@/lib/prisma";
 import { batchUpdateSchema } from "@/lib/validation";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("batches")
-    .select(BATCH_SELECT)
-    .eq("id", params.id)
-    .maybeSingle();
+  try {
+    const batch = await prisma.batch.findUnique({
+      where: { id: params.id },
+      include: BATCH_INCLUDE,
+    });
 
-  if (error) {
+    if (!batch) {
+      return failure("Batch not found", { status: 404 });
+    }
+
+    return success(batch);
+  } catch (error) {
     return failure("Unable to fetch batch", {
       status: 500,
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  if (!data) {
-    return failure("Batch not found", { status: 404 });
-  }
-
-  return success(data);
 }
 
 export async function PATCH(
@@ -60,64 +59,79 @@ export async function PATCH(
     notes,
   } = parsed.data;
 
-  const updates: Record<string, unknown> = {};
+  const data: Prisma.BatchUpdateInput = {};
 
-  if (code !== undefined) updates.code = code;
-  if (processId !== undefined) updates.process_id = processId;
-  if (bomTemplateId !== undefined) updates.bom_template_id = bomTemplateId ?? null;
-  if (status !== undefined) updates.status = status;
-  if (plannedQuantity !== undefined) updates.planned_quantity = plannedQuantity ?? null;
-  if (inputQuantity !== undefined) updates.input_quantity = inputQuantity ?? null;
-  if (outputQuantity !== undefined) updates.output_quantity = outputQuantity ?? null;
+  if (code !== undefined) data.code = code;
+  if (processId !== undefined) data.process_id = processId;
+  if (bomTemplateId !== undefined) data.bom_template_id = bomTemplateId ?? null;
+  if (status !== undefined) data.status = status as batch_status;
+  if (plannedQuantity !== undefined) data.planned_quantity = plannedQuantity ?? null;
+  if (inputQuantity !== undefined) data.input_quantity = inputQuantity ?? null;
+  if (outputQuantity !== undefined) data.output_quantity = outputQuantity ?? null;
   if (wastagePercentage !== undefined)
-    updates.wastage_percentage = wastagePercentage ?? null;
-  if (startedAt !== undefined) updates.started_at = startedAt ?? null;
-  if (completedAt !== undefined) updates.completed_at = completedAt ?? null;
-  if (supervisorId !== undefined) updates.supervisor_id = supervisorId ?? null;
-  if (createdBy !== undefined) updates.created_by = createdBy ?? null;
-  if (notes !== undefined) updates.notes = notes ?? null;
+    data.wastage_percentage = wastagePercentage ?? null;
+  if (startedAt !== undefined) data.started_at = startedAt ?? null;
+  if (completedAt !== undefined) data.completed_at = completedAt ?? null;
+  if (supervisorId !== undefined) data.supervisor_id = supervisorId ?? null;
+  if (createdBy !== undefined) data.created_by = createdBy ?? null;
+  if (notes !== undefined) data.notes = notes ?? null;
 
-  if (Object.keys(updates).length === 0) {
+  if (Object.keys(data).length === 0) {
     return failure("Nothing to update", { status: 400 });
   }
 
-  const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("batches")
-    .update(updates)
-    .eq("id", params.id)
-    .select(BATCH_SELECT)
-    .maybeSingle();
+  try {
+    const batch = await prisma.batch.update({
+      where: { id: params.id },
+      data,
+      include: BATCH_INCLUDE,
+    });
 
-  if (error) {
-    const statusCode = error.code === "23505" ? 409 : 500;
+    return success(batch);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return failure("Unable to update batch", {
+        status: 409,
+        details: error.message,
+      });
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return failure("Batch not found", { status: 404 });
+    }
+
     return failure("Unable to update batch", {
-      status: statusCode,
-      details: error.message,
+      status: 500,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  if (!data) {
-    return failure("Batch not found", { status: 404 });
-  }
-
-  return success(data);
 }
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const supabase = getSupabaseServerClient();
-  const { error } = await supabase
-    .from("batches")
-    .delete()
-    .eq("id", params.id);
+  try {
+    await prisma.batch.delete({
+      where: { id: params.id },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return failure("Batch not found", { status: 404 });
+    }
 
-  if (error) {
     return failure("Unable to delete batch", {
       status: 500,
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
 

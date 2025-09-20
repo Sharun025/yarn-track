@@ -1,34 +1,32 @@
+import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
+import { prisma } from "@/lib/prisma";
 import { processCreateSchema } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
-  const supabase = getSupabaseServerClient();
   const { searchParams } = new URL(request.url);
   const activeFilter = searchParams.get("active");
 
-  let query = supabase
-    .from("processes")
-    .select("*")
-    .order("sequence", { ascending: true, nullsFirst: false })
-    .order("name", { ascending: true });
+  const where = activeFilter === "true" ? { is_active: true } : undefined;
 
-  if (activeFilter === "true") {
-    query = query.eq("is_active", true);
-  }
+  try {
+    const processes = await prisma.process.findMany({
+      where,
+      orderBy: [
+        { sequence: { sort: "asc", nulls: "last" } },
+        { name: "asc" },
+      ],
+    });
 
-  const { data, error } = await query;
-
-  if (error) {
+    return success(processes);
+  } catch (error) {
     return failure("Unable to fetch processes", {
       status: 500,
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  return success(data ?? []);
 }
 
 export async function POST(request: NextRequest) {
@@ -42,28 +40,32 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const supabase = getSupabaseServerClient();
-  const payload = {
-    slug: parsed.data.slug,
-    name: parsed.data.name,
-    description: parsed.data.description ?? null,
-    sequence: parsed.data.sequence ?? null,
-    is_active: parsed.data.isActive ?? true,
-  };
+  try {
+    const process = await prisma.process.create({
+      data: {
+        slug: parsed.data.slug,
+        name: parsed.data.name,
+        description: parsed.data.description ?? null,
+        sequence: parsed.data.sequence ?? null,
+        is_active: parsed.data.isActive ?? true,
+      },
+    });
 
-  const { data, error } = await supabase
-    .from("processes")
-    .insert(payload)
-    .select("*")
-    .single();
+    return success(process, 201);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return failure("Unable to create process", {
+        status: 409,
+        details: error.message,
+      });
+    }
 
-  if (error) {
-    const status = error.code === "23505" ? 409 : 500;
     return failure("Unable to create process", {
-      status,
-      details: error.message,
+      status: 500,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  return success(data, 201);
 }

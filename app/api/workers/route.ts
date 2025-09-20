@@ -1,47 +1,52 @@
+import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 
 import { failure, success } from "@/lib/apiHelpers";
-import { getSupabaseServerClient } from "@/lib/supabaseServerClient";
+import { prisma } from "@/lib/prisma";
 import { workerCreateSchema } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
-  const supabase = getSupabaseServerClient();
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const search = searchParams.get("search");
   const department = searchParams.get("department");
 
-  let query = supabase
-    .from("workers")
-    .select("*")
-    .order("display_name", { ascending: true })
-    .order("code", { ascending: true });
+  const where: Prisma.WorkerWhereInput = {};
 
   if (status) {
-    query = query.eq("status", status);
+    where.status = status;
   }
 
   if (department) {
-    query = query.eq("department", department);
+    where.department = department;
   }
 
   if (search) {
     const value = search.trim();
     if (value.length > 0) {
-      query = query.or(`code.ilike.%${value}%,display_name.ilike.%${value}%`);
+      where.OR = [
+        { code: { contains: value, mode: "insensitive" } },
+        { display_name: { contains: value, mode: "insensitive" } },
+      ];
     }
   }
 
-  const { data, error } = await query;
+  try {
+    const workers = await prisma.worker.findMany({
+      where,
+      orderBy: [
+        { display_name: "asc" },
+        { code: "asc" },
+      ],
+    });
 
-  if (error) {
+    return success(workers);
+  } catch (error) {
     return failure("Unable to fetch workers", {
       status: 500,
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  return success(data ?? []);
 }
 
 export async function POST(request: NextRequest) {
@@ -55,32 +60,38 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const { code, name, role, department, shift, status, contact, skills } = parsed.data;
-  const payload = {
-    code,
-    display_name: name,
-    role: role ?? null,
-    department: department ?? null,
-    shift: shift ?? null,
-    status: status ?? null,
-    contact: contact ?? null,
-    skills: skills ?? null,
-  };
+  const { code, name, role, department, shift, status, contact, skills } =
+    parsed.data;
 
-  const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("workers")
-    .insert(payload)
-    .select("*")
-    .single();
+  try {
+    const worker = await prisma.worker.create({
+      data: {
+        code,
+        display_name: name,
+        role: role ?? null,
+        department: department ?? null,
+        shift: shift ?? null,
+        status: status ?? null,
+        contact: contact ?? null,
+        skills: skills ?? null,
+      },
+    });
 
-  if (error) {
-    const statusCode = error.code === "23505" ? 409 : 500;
+    return success(worker, 201);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return failure("Unable to create worker", {
+        status: 409,
+        details: error.message,
+      });
+    }
+
     return failure("Unable to create worker", {
-      status: statusCode,
-      details: error.message,
+      status: 500,
+      details: error instanceof Error ? error.message : String(error),
     });
   }
-
-  return success(data, 201);
 }
